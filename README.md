@@ -155,6 +155,28 @@ pip install -r requirements.txt
 python main.py
 ```
 
+## Security Hardening
+
+- Never commit secrets. Keep tokens only in local `.env` or platform secret stores.
+- Rotate any exposed `GITHUB_TOKEN` immediately.
+- For public deployments, require MCP bearer auth:
+
+```bash
+# required for GitHub API calls
+GITHUB_TOKEN=<real-github-token>
+
+# enable MCP endpoint protection
+MCP_AUTH_TOKEN=<long-random-secret>
+REQUIRE_MCP_AUTH=true
+
+# runtime bind (for containers/platforms)
+HOST=0.0.0.0
+PORT=8000
+```
+
+- Client calls must then send `Authorization: Bearer <MCP_AUTH_TOKEN>`.
+- Use `.env.example` as the template for local secure setup.
+
 ## Smoke Testing
 
 - Use [SMOKE_TEST.md](SMOKE_TEST.md) for copy/paste checks of `initialize`, `tools/list`, `triage_issue`, and `review_pr`.
