@@ -8,6 +8,10 @@ primary_region = 'cdg'
 
 [build]
 
+[env]
+  HOST = '0.0.0.0'
+  PORT = '8000'
+
 [http_service]
   internal_port = 8000
   force_https = true

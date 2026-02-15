@@ -3,13 +3,53 @@ from github import Github, Auth
 import os
 import re
 import hashlib
+import hmac
 from urllib.parse import quote
 from dotenv import load_dotenv
+from fastmcp.server.auth.auth import TokenVerifier, AccessToken
 
 load_dotenv()
 
-mcp = FastMCP("github-mcp-pro")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+MCP_AUTH_TOKEN = os.getenv("MCP_AUTH_TOKEN")
+REQUIRE_MCP_AUTH = os.getenv("REQUIRE_MCP_AUTH", "false").strip().lower() in {"1", "true", "yes", "on"}
+
+
+class StaticTokenVerifier(TokenVerifier):
+    def __init__(self, token: str):
+        super().__init__(required_scopes=["mcp:access"])
+        self._token = token
+
+    async def verify_token(self, token: str) -> AccessToken | None:
+        if not hmac.compare_digest(token, self._token):
+            return None
+
+        return AccessToken(
+            token=token,
+            client_id="github-mcp-pro-client",
+            scopes=["mcp:access"],
+        )
+
+
+def _sanitize_error(message: str) -> str:
+    if not message:
+        return "Unknown error"
+    redacted = TOKEN_LITERAL_REGEX.sub("[REDACTED_TOKEN]", message)
+    redacted = re.sub(r"ghu_[A-Za-z0-9]{20,}", "[REDACTED_TOKEN]", redacted)
+    return redacted
+
+
+if REQUIRE_MCP_AUTH and not MCP_AUTH_TOKEN:
+    raise RuntimeError("REQUIRE_MCP_AUTH is enabled but MCP_AUTH_TOKEN is not set")
+
+if not GITHUB_TOKEN:
+    raise RuntimeError("Missing required GITHUB_TOKEN environment variable")
+
+if "your_token_here" in GITHUB_TOKEN.lower():
+    raise RuntimeError("GITHUB_TOKEN appears to be a placeholder value")
+
+auth_provider = StaticTokenVerifier(MCP_AUTH_TOKEN) if MCP_AUTH_TOKEN else None
+mcp = FastMCP("github-mcp-pro", auth=auth_provider)
 
 SENSITIVE_TERMS = [
     'auth', 'security', 'permission', 'role', 'token', 'secret',
@@ -59,8 +99,6 @@ def _is_test_file(filename: str) -> bool:
 
 
 def _get_repo(repo: str):
-    if not GITHUB_TOKEN:
-        raise ValueError("Missing GITHUB_TOKEN environment variable")
     auth = Auth.Token(GITHUB_TOKEN)
     return Github(auth=auth).get_repo(repo)
 
@@ -79,7 +117,7 @@ def review_pr(repo: str, pr_id: int) -> str:
 
         def build_inline_marker(finding: dict) -> str:
             marker_seed = f"{finding['severity']}|{finding['filename']}|{finding['line']}|{finding['message']}"
-            marker_hash = hashlib.sha1(marker_seed.encode()).hexdigest()[:12]
+            marker_hash = hashlib.sha256(marker_seed.encode()).hexdigest()[:12]
             return f"mcp-lint:{marker_hash}"
 
         def extract_added_lines_with_numbers(patch_text: str):
@@ -321,7 +359,7 @@ def review_pr(repo: str, pr_id: int) -> str:
         )
         
     except Exception as e:
-        return f"❌ Error reviewing PR: {str(e)}"
+        return f"❌ Error reviewing PR: {_sanitize_error(str(e))}"
 
 @mcp.tool()
 def generate_code(repo: str, path: str, prompt: str) -> str:
@@ -384,7 +422,7 @@ export const {hook_name} = () => {{
         return f"✅ Generated {path}:\n```typescript\n{code}\n```\n\n💡 Copy code and create file manually, or integrate with repo write access."
         
     except Exception as e:
-        return f"❌ Error: {str(e)}"
+        return f"❌ Error: {_sanitize_error(str(e))}"
 
 @mcp.tool()
 def triage_issue(repo: str, issue_id: int) -> str:
@@ -437,7 +475,7 @@ def triage_issue(repo: str, issue_id: int) -> str:
         return result
         
     except Exception as e:
-        return f"❌ Error triaging issue: {str(e)}"
+        return f"❌ Error triaging issue: {_sanitize_error(str(e))}"
 
 @mcp.tool()
 def assess_pr_risk(repo: str, pr_id: int) -> str:
@@ -541,7 +579,9 @@ def assess_pr_risk(repo: str, pr_id: int) -> str:
         return report.strip()
 
     except Exception as e:
-        return f"❌ Error assessing PR risk: {str(e)}"
+        return f"❌ Error assessing PR risk: {_sanitize_error(str(e))}"
 
 if __name__ == "__main__":
-    mcp.run(transport="http", host="0.0.0.0", port=8000)
+    host = os.getenv("HOST", "127.0.0.1")
+    port = int(os.getenv("PORT", "8000"))
+    mcp.run(transport="http", host=host, port=port)
