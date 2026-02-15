@@ -2,6 +2,7 @@ from fastmcp import FastMCP
 from github import Github, Auth
 import os
 import re
+import hashlib
 from urllib.parse import quote
 from dotenv import load_dotenv
 
@@ -24,6 +25,11 @@ def review_pr(repo: str, pr_id: int) -> str:
         lint_findings = []
         lint_seen = set()
         pr_blob_base = f"https://github.com/{repo}/blob/{pr.head.sha}"
+
+        def build_inline_marker(finding: dict) -> str:
+            marker_seed = f"{finding['severity']}|{finding['filename']}|{finding['line']}|{finding['message']}"
+            marker_hash = hashlib.sha1(marker_seed.encode()).hexdigest()[:12]
+            return f"mcp-lint:{marker_hash}"
 
         def extract_added_lines_with_numbers(patch_text: str):
             added = []
@@ -233,13 +239,54 @@ def review_pr(repo: str, pr_id: int) -> str:
             summary += "✅ No common issues detected. Code looks clean!"
         
         summary += f"\n\n---\n*Automated by GitHub MCP Pro*"
+
+        inline_posted = 0
+        try:
+            existing_markers = set()
+            for review_comment in pr.get_review_comments():
+                body = review_comment.body or ""
+                for match in re.findall(r"mcp-lint:[a-f0-9]{12}", body):
+                    existing_markers.add(match)
+
+            for finding in lint_findings:
+                if finding["severity"] not in {"CRITICAL", "MAJOR"}:
+                    continue
+                if not finding.get("line"):
+                    continue
+
+                marker = build_inline_marker(finding)
+                if marker in existing_markers:
+                    continue
+
+                inline_body = (
+                    f"🧹 **MCP Lint {finding['severity']}**\n"
+                    f"{finding['message']}\n"
+                    f"Source: {finding['link']}\n"
+                    f"<!-- {marker} -->"
+                )
+
+                try:
+                    pr.create_review_comment(
+                        body=inline_body,
+                        commit=pr.head.sha,
+                        path=finding["filename"],
+                        line=finding["line"],
+                        side="RIGHT",
+                    )
+                    inline_posted += 1
+                    existing_markers.add(marker)
+                except Exception:
+                    continue
+        except Exception:
+            inline_posted = 0
         
         # Post comment
         pr.create_issue_comment(summary)
         
         return (
             f"✅ PR #{pr_id} reviewed: {len(files)} files analyzed, "
-            f"{len(issues_found)} suggestions and {len(lint_findings)} lint findings reported."
+            f"{len(issues_found)} suggestions and {len(lint_findings)} lint findings reported "
+            f"({inline_posted} inline comments created)."
         )
         
     except Exception as e:
