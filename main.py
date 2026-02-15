@@ -19,6 +19,12 @@ def review_pr(repo: str, pr_id: int) -> str:
         
         files = list(pr.get_files())
         issues_found = []
+        lint_findings = []
+
+        def add_lint(severity: str, message: str):
+            entry = f"{severity.upper()}: {message}"
+            if entry not in lint_findings:
+                lint_findings.append(entry)
         
         # Analyze each file
         for file in files:
@@ -27,15 +33,41 @@ def review_pr(repo: str, pr_id: int) -> str:
                 
             patch = file.patch.lower()
             filename = file.filename
+            added_lines = [
+                line[1:] for line in file.patch.splitlines()
+                if line.startswith('+') and not line.startswith('+++')
+            ]
+            added_text = "\n".join(added_lines).lower()
             
             # Pattern detection (regex smart)
             if filename.endswith(('.js', '.jsx', '.ts', '.tsx')):
-                if 'console.log' in patch:
+                if 'console.log' in added_text:
                     issues_found.append(f"⚠️ {filename}: Remove console.log before merge")
-                if 'useeffect' in patch and 'dependency' not in patch:
+                    add_lint("minor", f"{filename}: debug statement (console.log) added")
+                if 'debugger' in added_text:
+                    add_lint("major", f"{filename}: debugger statement added")
+                if 'var ' in added_text:
+                    add_lint("minor", f"{filename}: use let/const instead of var")
+                if 'eslint-disable' in added_text:
+                    add_lint("major", f"{filename}: eslint-disable directive added")
+                if 'useeffect' in added_text and 'dependency' not in added_text:
                     issues_found.append(f"⚠️ {filename}: Check useEffect dependencies")
-                if 'any' in patch and '.ts' in filename:
+                if 'any' in added_text and '.ts' in filename:
                     issues_found.append(f"💡 {filename}: Avoid 'any' type, use specific types")
+                    add_lint("major", f"{filename}: TypeScript 'any' introduced")
+
+            if filename.endswith('.py'):
+                if 'except:' in added_text:
+                    add_lint("major", f"{filename}: bare except detected")
+                if 'print(' in added_text and '/test' not in filename.lower() and '/tests' not in filename.lower():
+                    add_lint("info", f"{filename}: print() added outside tests")
+
+            if 'eval(' in added_text:
+                add_lint("critical", f"{filename}: eval usage detected")
+            if 'password =' in added_text or 'api_key' in added_text or 'secret =' in added_text:
+                add_lint("critical", f"{filename}: potential hardcoded secret pattern")
+            if 'todo' in added_text or 'fixme' in added_text:
+                add_lint("info", f"{filename}: TODO/FIXME added")
             
             if '+import' in patch and filename.count('/') > 3:
                 issues_found.append(f"💡 {filename}: Deep imports detected, consider barrel exports")
@@ -97,10 +129,28 @@ def review_pr(repo: str, pr_id: int) -> str:
         summary = f"**🤖 GitHub MCP Pro Review - PR #{pr_id}**\n\n"
         summary += f"📊 **Stats**: {len(files)} files, {pr.additions} additions, {pr.deletions} deletions\n"
         summary += f"🚦 **Risk**: {risk_score}/100 ({risk_level})\n\n"
+
+        if lint_findings:
+            severity_order = {"CRITICAL": 0, "MAJOR": 1, "MINOR": 2, "INFO": 3}
+            lint_findings.sort(key=lambda item: severity_order.get(item.split(':', 1)[0], 99))
+            lint_counts = {"CRITICAL": 0, "MAJOR": 0, "MINOR": 0, "INFO": 0}
+            for finding in lint_findings:
+                key = finding.split(':', 1)[0]
+                if key in lint_counts:
+                    lint_counts[key] += 1
+
+            summary += (
+                "🧹 **Lint Findings**: "
+                f"critical {lint_counts['CRITICAL']}, "
+                f"major {lint_counts['MAJOR']}, "
+                f"minor {lint_counts['MINOR']}, "
+                f"info {lint_counts['INFO']}\n"
+            )
+            summary += "\n**Top Lint Alerts**:\n" + "\n".join([f"- {finding}" for finding in lint_findings[:8]]) + "\n\n"
         
         if issues_found:
             summary += "**Issues & Suggestions**:\n" + "\n".join([f"- {issue}" for issue in issues_found[:10]])
-        else:
+        elif not lint_findings:
             summary += "✅ No common issues detected. Code looks clean!"
         
         summary += f"\n\n---\n*Automated by GitHub MCP Pro*"
@@ -108,7 +158,10 @@ def review_pr(repo: str, pr_id: int) -> str:
         # Post comment
         pr.create_issue_comment(summary)
         
-        return f"✅ PR #{pr_id} reviewed: {len(files)} files analyzed, {len(issues_found)} suggestions posted."
+        return (
+            f"✅ PR #{pr_id} reviewed: {len(files)} files analyzed, "
+            f"{len(issues_found)} suggestions and {len(lint_findings)} lint findings reported."
+        )
         
     except Exception as e:
         return f"❌ Error reviewing PR: {str(e)}"
