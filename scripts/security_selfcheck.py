@@ -50,7 +50,7 @@ def _assert_startup_guards() -> None:
 
     code, output = _run_import_with_env(
         {
-            "GITHUB_TOKEN": "ghp_exampletoken1234567890",
+            "GITHUB_TOKEN": "ci_selfcheck_token_value_67890",
             "MCP_AUTH_TOKEN": None,
             "REQUIRE_MCP_AUTH": "true",
         }
