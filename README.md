@@ -11,6 +11,7 @@ MCP server for GitHub workflows: automated PR reviews, repository-aware code gen
 ✅ **PR Risk Scoring**: Risk score (0-100), level, and merge checklist for each PR  
 ✅ **PR Auto-Execution**: GitHub Actions runs review + risk tools on every PR update  
 ✅ **Commit Auto-Execution**: On `push` to branch, tools run automatically if an open PR exists  
+✅ **No-PR Commit Feedback**: On `push` without PR, branch commit analysis is posted automatically  
 ✅ **Issue Triage**: Auto-labeling (bug/feature/docs/priority) with keyword detection  
 ✅ **Code Templates**: React components, hooks, API routes generation  
 - **Live Endpoint**: [https://stefano-mcp-pro.fly.dev/mcp](https://stefano-mcp-pro.fly.dev/mcp)
@@ -166,7 +167,7 @@ python main.py
 - Behavior:
   - Runs `review_pr` automatically (summary + inline lint comments)
   - Runs `assess_pr_risk` automatically (posts/updates a single risk comment)
-  - On `push`, if no open PR exists yet for the branch, execution is skipped cleanly
+  - On `push` with no open PR, runs commit-range checks and posts commit feedback automatically
 
 ## Deploy Your Own
 
