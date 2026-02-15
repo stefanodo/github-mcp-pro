@@ -14,7 +14,6 @@ cloudpickle==3.1.2
 croniter==6.0.0
 cryptography==46.0.5
 cyclopts==4.5.2
-diskcache==5.6.3
 dnspython==2.8.0
 docstring_parser==0.17.0
 docutils==0.22.4
