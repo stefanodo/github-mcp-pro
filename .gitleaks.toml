@@ -1,0 +1,15 @@
+title = "github-mcp-pro gitleaks config"
+
+[allowlist]
+description = "Allow known placeholder/example tokens in docs and templates"
+regexes = [
+  '''ghp_your_token_here''',
+  '''ghp_xxx''',
+  '''ghp_replace_with_real_token''',
+  '''<real-github-token>''',
+  '''replace_with_long_random_secret'''
+]
+paths = [
+  '''README\.md''',
+  '''\.env\.example'''
+]
