@@ -226,6 +226,7 @@ MIT - See [LICENSE](https://github.com/stefanodo/github-mcp-pro/blob/main/LICENS
 ## Support
 
 - Issues: [GitHub Issues](https://github.com/stefanodo/github-mcp-pro/issues)
+- Security: [SECURITY.md](SECURITY.md)
 - MCP Registry: Coming soon
 - MCPMarket: Pending approval
 
