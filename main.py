@@ -11,13 +11,64 @@ load_dotenv()
 mcp = FastMCP("github-mcp-pro")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 
+SENSITIVE_TERMS = [
+    'auth', 'security', 'permission', 'role', 'token', 'secret',
+    'billing', 'payment', 'database', 'schema', 'migration',
+    'deploy', 'infra', 'config', 'middleware', 'crypto'
+]
+
+RISK_SIGNAL_MAP = {
+    'eval(': 'Dynamic evaluation detected (eval)',
+    'innerhtml': 'Potential XSS surface (innerHTML)',
+    'dangerouslysetinnerhtml': 'Potential XSS surface (dangerouslySetInnerHTML)',
+    'os.system(': 'Shell execution detected (os.system)',
+    'subprocess.': 'Process execution detected (subprocess)',
+    'drop table': 'Destructive SQL statement in patch',
+    'alter table': 'Schema mutation in patch',
+    'chmod 777': 'Overly permissive file mode',
+    'skip(ci)': 'CI skip marker detected'
+}
+
+LABEL_COLORS = {
+    'bug': 'd73a4a',
+    'enhancement': 'a2eeef',
+    'documentation': '0075ca',
+    'priority:high': 'd93f0b',
+    'frontend': 'fbca04',
+    'backend': '1d76db'
+}
+
+SECRET_ASSIGNMENT_REGEX = re.compile(
+    r"^\s*(?:const\s+|let\s+|var\s+)?[A-Za-z_][A-Za-z0-9_]*(?:password|secret|api[_-]?key|token)[A-Za-z0-9_]*\s*=\s*['\"][^'\"]{4,}['\"]",
+    re.IGNORECASE,
+)
+TOKEN_LITERAL_REGEX = re.compile(r"(ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})")
+
+
+def _is_test_file(filename: str) -> bool:
+    filename = filename.lower()
+    return (
+        '/test' in filename
+        or '/tests' in filename
+        or filename.endswith('.test.js')
+        or filename.endswith('.test.ts')
+        or filename.endswith('.spec.js')
+        or filename.endswith('.spec.ts')
+        or filename.startswith('test_')
+    )
+
+
+def _get_repo(repo: str):
+    if not GITHUB_TOKEN:
+        raise ValueError("Missing GITHUB_TOKEN environment variable")
+    auth = Auth.Token(GITHUB_TOKEN)
+    return Github(auth=auth).get_repo(repo)
+
 @mcp.tool()
 def review_pr(repo: str, pr_id: int) -> str:
     """Reviews PR: analyzes diff, detects issues, posts suggestions."""
     try:
-        auth = Auth.Token(GITHUB_TOKEN)
-        g = Github(auth=auth)
-        gh_repo = g.get_repo(repo)
+        gh_repo = _get_repo(repo)
         pr = gh_repo.get_pull(pr_id)
         
         files = list(pr.get_files())
@@ -124,7 +175,7 @@ def review_pr(repo: str, pr_id: int) -> str:
                 for line_number, line_text in code_lines:
                     if re.search(r"^\s*except\s*:\s*$", line_text):
                         add_lint("major", filename, line_number, "bare except detected")
-                if '/test' not in filename.lower() and '/tests' not in filename.lower():
+                if not _is_test_file(filename):
                     for line_number, line_text in code_lines:
                         if re.search(r"(?<!['\"])\bprint\s*\(", line_text):
                             add_lint("info", filename, line_number, "print() added outside tests")
@@ -133,13 +184,8 @@ def review_pr(repo: str, pr_id: int) -> str:
                 if re.search(r"(?<!['\"])\beval\s*\(", line_text):
                     add_lint("critical", filename, line_number, "eval usage detected")
 
-            secret_assignment_regex = re.compile(
-                r"^\s*(?:const\s+|let\s+|var\s+)?[A-Za-z_][A-Za-z0-9_]*(?:password|secret|api[_-]?key|token)[A-Za-z0-9_]*\s*=\s*['\"][^'\"]{4,}['\"]",
-                re.IGNORECASE,
-            )
-            token_literal_regex = re.compile(r"(ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})")
             for line_number, line_text in code_lines:
-                if secret_assignment_regex.search(line_text) or token_literal_regex.search(line_text):
+                if SECRET_ASSIGNMENT_REGEX.search(line_text) or TOKEN_LITERAL_REGEX.search(line_text):
                     add_lint("critical", filename, line_number, "potential hardcoded secret pattern")
 
             for line_number, line_text in comment_lines:
@@ -163,28 +209,15 @@ def review_pr(repo: str, pr_id: int) -> str:
         elif total_changes > 300:
             risk_score += 10
 
-        sensitive_terms = [
-            'auth', 'security', 'permission', 'role', 'token', 'secret',
-            'billing', 'payment', 'database', 'schema', 'migration',
-            'deploy', 'infra', 'config', 'middleware', 'crypto'
-        ]
         sensitive_touches = 0
         test_files = 0
 
         for file in files:
             filename = file.filename.lower()
-            if any(term in filename for term in sensitive_terms):
+            if any(term in filename for term in SENSITIVE_TERMS):
                 sensitive_touches += 1
 
-            if (
-                '/test' in filename
-                or '/tests' in filename
-                or filename.endswith('.test.js')
-                or filename.endswith('.test.ts')
-                or filename.endswith('.spec.js')
-                or filename.endswith('.spec.ts')
-                or filename.startswith('test_')
-            ):
+            if _is_test_file(filename):
                 test_files += 1
 
         if sensitive_touches:
@@ -357,9 +390,7 @@ export const {hook_name} = () => {{
 def triage_issue(repo: str, issue_id: int) -> str:
     """Smart triage: auto-labels, detects type/priority, assigns."""
     try:
-        auth = Auth.Token(GITHUB_TOKEN)
-        g = Github(auth=auth)
-        gh_repo = g.get_repo(repo)
+        gh_repo = _get_repo(repo)
         issue = gh_repo.get_issue(issue_id)
         
         text = f"{issue.title} {issue.body or ''}".lower()
@@ -387,20 +418,15 @@ def triage_issue(repo: str, issue_id: int) -> str:
             labels_to_add.append('frontend')
         if any(kw in text for kw in ['api', 'backend', 'database', 'server']):
             labels_to_add.append('backend')
+
+        labels_to_add = list(dict.fromkeys(labels_to_add))
         
         # Apply labels (create if not exist)
-        existing_labels = [l.name for l in gh_repo.get_labels()]
+        existing_labels = {l.name.lower() for l in gh_repo.get_labels()}
         for label in labels_to_add:
-            if label not in existing_labels:
-                colors = {
-                    'bug': 'd73a4a',
-                    'enhancement': 'a2eeef',
-                    'documentation': '0075ca',
-                    'priority:high': 'd93f0b',
-                    'frontend': 'fbca04',
-                    'backend': '1d76db'
-                }
-                gh_repo.create_label(label, colors.get(label, 'ededed'))
+            if label.lower() not in existing_labels:
+                gh_repo.create_label(label, LABEL_COLORS.get(label, 'ededed'))
+                existing_labels.add(label.lower())
             
             issue.add_to_labels(label)
         
@@ -417,9 +443,7 @@ def triage_issue(repo: str, issue_id: int) -> str:
 def assess_pr_risk(repo: str, pr_id: int) -> str:
     """Assesses PR risk score with actionable review checklist."""
     try:
-        auth = Auth.Token(GITHUB_TOKEN)
-        g = Github(auth=auth)
-        gh_repo = g.get_repo(repo)
+        gh_repo = _get_repo(repo)
         pr = gh_repo.get_pull(pr_id)
 
         files = list(pr.get_files())
@@ -441,12 +465,6 @@ def assess_pr_risk(repo: str, pr_id: int) -> str:
             risk_score += 10
             risk_factors.append(f"Moderate code churn: {total_changes} lines changed")
 
-        sensitive_terms = [
-            'auth', 'security', 'permission', 'role', 'token', 'secret',
-            'billing', 'payment', 'database', 'schema', 'migration',
-            'deploy', 'infra', 'config', 'middleware', 'crypto'
-        ]
-
         sensitive_files = []
         test_files = 0
         risky_signals = 0
@@ -455,33 +473,13 @@ def assess_pr_risk(repo: str, pr_id: int) -> str:
             filename = changed_file.filename.lower()
             patch = (changed_file.patch or '').lower()
 
-            if any(term in filename for term in sensitive_terms):
+            if any(term in filename for term in SENSITIVE_TERMS):
                 sensitive_files.append(changed_file.filename)
 
-            if (
-                '/test' in filename
-                or '/tests' in filename
-                or filename.endswith('.test.js')
-                or filename.endswith('.test.ts')
-                or filename.endswith('.spec.js')
-                or filename.endswith('.spec.ts')
-                or filename.startswith('test_')
-            ):
+            if _is_test_file(filename):
                 test_files += 1
 
-            signal_map = {
-                'eval(': 'Dynamic evaluation detected (eval)',
-                'innerhtml': 'Potential XSS surface (innerHTML)',
-                'dangerouslysetinnerhtml': 'Potential XSS surface (dangerouslySetInnerHTML)',
-                'os.system(': 'Shell execution detected (os.system)',
-                'subprocess.': 'Process execution detected (subprocess)',
-                'drop table': 'Destructive SQL statement in patch',
-                'alter table': 'Schema mutation in patch',
-                'chmod 777': 'Overly permissive file mode',
-                'skip(ci)': 'CI skip marker detected'
-            }
-
-            for pattern, message in signal_map.items():
+            for pattern, message in RISK_SIGNAL_MAP.items():
                 if pattern in patch:
                     risky_signals += 1
                     if message not in risk_factors:
