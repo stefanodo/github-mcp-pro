@@ -1,0 +1,14 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+  "name": "io.github.stefanodo.github-mcp-pro",
+  "title": "GitHub MCP Pro",
+  "description": "Advanced GitHub AI: PR review, code gen, triage",
+  "version": "1.0.0",
+  "icon": "https://github.com/favicon.ico",
+  "remotes": [{"url": "http://localhost:8000", "transport": "http"}],
+  "metadata": {
+    "repository": "https://github.com/stefanodo/github-mcp-pro",
+    "license": "MIT",
+    "pricing": "freemium"
+  }
+}
