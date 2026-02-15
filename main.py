@@ -39,10 +39,64 @@ def review_pr(repo: str, pr_id: int) -> str:
             
             if '+import' in patch and filename.count('/') > 3:
                 issues_found.append(f"💡 {filename}: Deep imports detected, consider barrel exports")
+
+        # Lightweight risk summary for quick merge prioritization
+        total_changes = pr.additions + pr.deletions
+        risk_score = 0
+
+        if len(files) > 15:
+            risk_score += 18
+        elif len(files) > 8:
+            risk_score += 10
+
+        if total_changes > 800:
+            risk_score += 18
+        elif total_changes > 300:
+            risk_score += 10
+
+        sensitive_terms = [
+            'auth', 'security', 'permission', 'role', 'token', 'secret',
+            'billing', 'payment', 'database', 'schema', 'migration',
+            'deploy', 'infra', 'config', 'middleware', 'crypto'
+        ]
+        sensitive_touches = 0
+        test_files = 0
+
+        for file in files:
+            filename = file.filename.lower()
+            if any(term in filename for term in sensitive_terms):
+                sensitive_touches += 1
+
+            if (
+                '/test' in filename
+                or '/tests' in filename
+                or filename.endswith('.test.js')
+                or filename.endswith('.test.ts')
+                or filename.endswith('.spec.js')
+                or filename.endswith('.spec.ts')
+                or filename.startswith('test_')
+            ):
+                test_files += 1
+
+        if sensitive_touches:
+            risk_score += min(24, 8 + (sensitive_touches * 4))
+        if len(files) - test_files > 0 and test_files == 0:
+            risk_score += 12
+
+        risk_score = min(100, risk_score)
+        if risk_score >= 70:
+            risk_level = "critical"
+        elif risk_score >= 45:
+            risk_level = "high"
+        elif risk_score >= 25:
+            risk_level = "medium"
+        else:
+            risk_level = "low"
         
         # Generate review summary
         summary = f"**🤖 GitHub MCP Pro Review - PR #{pr_id}**\n\n"
-        summary += f"📊 **Stats**: {len(files)} files, {pr.additions} additions, {pr.deletions} deletions\n\n"
+        summary += f"📊 **Stats**: {len(files)} files, {pr.additions} additions, {pr.deletions} deletions\n"
+        summary += f"🚦 **Risk**: {risk_score}/100 ({risk_level})\n\n"
         
         if issues_found:
             summary += "**Issues & Suggestions**:\n" + "\n".join([f"- {issue}" for issue in issues_found[:10]])
