@@ -181,6 +181,16 @@ PORT=8000
 
 - Use [SMOKE_TEST.md](SMOKE_TEST.md) for copy/paste checks of `initialize`, `tools/list`, `triage_issue`, and `review_pr`.
 
+## Security Test Coverage
+
+- Run the security-focused regression tests locally:
+
+```bash
+python -m unittest discover -s tests -p 'test_*.py'
+```
+
+- These tests cover startup guards, token redaction, static token verification, and `scripts/security_selfcheck.py` execution.
+
 ## Release Checklist (README vs Code)
 
 Before each release, validate this quick checklist:
