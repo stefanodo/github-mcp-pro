@@ -62,7 +62,7 @@ def _assert_startup_guards() -> None:
 def _assert_error_redaction() -> None:
     import main  # noqa: PLC0415
 
-    sample = "leaked token ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ123456"
+    sample = "leaked token " + "ghp_" + ("A" * 32)
     redacted = main._sanitize_error(sample)
     assert "ghp_" not in redacted
     assert "[REDACTED_TOKEN]" in redacted
@@ -85,7 +85,7 @@ def main_check() -> None:
     _assert_startup_guards()
     _assert_error_redaction()
     asyncio.run(_assert_static_token_verifier())
-    print("security_selfcheck_ok")
+    sys.stdout.write("security_selfcheck_ok\n")
 
 
 if __name__ == "__main__":

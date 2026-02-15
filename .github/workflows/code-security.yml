@@ -41,5 +41,5 @@ jobs:
 
       - name: Run security self-checks
         env:
-          GITHUB_TOKEN: ghp_exampletoken1234567890
+          GITHUB_TOKEN: ci_selfcheck_token_value_12345
         run: python scripts/security_selfcheck.py
