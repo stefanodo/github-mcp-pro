@@ -2,11 +2,12 @@
 
 MCP server for GitHub workflows: automated PR reviews, repository-aware code generation, and issue triage.
 
-## Features
+## Features (v1.0 - MVP)
 
-- **PR Review**: Analyzes diffs, suggests refactors, and posts actionable feedback
-- **Code Generation**: Generates repository-aware code updates across files
-- **Issue Triage**: Labels, assigns, and prioritizes issues automatically
+✅ **Smart PR Review**: Pattern detection (console.log, useEffect deps, TypeScript any)  
+✅ **Issue Triage**: Auto-labeling (bug/feature/docs/priority) with keyword detection  
+✅ **Code Templates**: React components, hooks, API routes generation  
+🔄 **Coming Soon**: Full AI analysis with Claude integration (Plan C)
 - **Live Endpoint**: [https://stefano-mcp-pro.fly.dev](https://stefano-mcp-pro.fly.dev)
 
 ## Quick Start
