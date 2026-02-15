@@ -2,13 +2,15 @@
 
 MCP server for GitHub workflows: automated PR reviews, repository-aware code generation, and issue triage.
 
-## Features (v1.0 - MVP)
+## Features
 
-✅ **Smart PR Review**: Pattern detection (console.log, useEffect deps, TypeScript any)  
+✅ **Smart PR Review**: Finds actionable issues in changed code and posts a PR summary comment  
+✅ **Lint-Style Findings**: `critical/major/minor/info` severity buckets with per-finding details  
+✅ **Clickable Code Links**: Findings include direct GitHub links to file + exact line  
+✅ **Inline PR Annotations**: Lint findings are also posted as inline comments in `Files changed`  
 ✅ **PR Risk Scoring**: Risk score (0-100), level, and merge checklist for each PR  
 ✅ **Issue Triage**: Auto-labeling (bug/feature/docs/priority) with keyword detection  
 ✅ **Code Templates**: React components, hooks, API routes generation  
-🔄 **Coming Soon**: Full AI analysis with Claude integration (Plan C)
 - **Live Endpoint**: [https://stefano-mcp-pro.fly.dev/mcp](https://stefano-mcp-pro.fly.dev/mcp)
 
 ## Quick Start
@@ -43,11 +45,17 @@ Add to `claude_desktop_config.json`:
 
 ### `review_pr`
 
-Reviews pull requests and returns concrete suggestions based on changed files.
+Reviews pull requests, posts a summary comment, and creates inline lint annotations.
 
 ```python
 review_pr(repo="owner/repo", pr_id=123)
-# Returns: "✅ PR #123 reviewed: 5 files changed. Suggestions: Refactor hooks; add tests."
+# Returns: "✅ PR #123 reviewed: ... suggestions and ... lint findings reported (... inline comments created)."
+```
+
+Natural-language prompt example:
+
+```text
+Review PR 123 in owner/repo with github-pro.
 ```
 
 ### `generate_code`
@@ -59,6 +67,12 @@ generate_code(repo="owner/repo", path="src/App.js", prompt="Create login form")
 # Returns: Generated React component with validation
 ```
 
+Natural-language prompt example:
+
+```text
+With github-pro, generate code for owner/repo at src/App.js to create a login form with validation.
+```
+
 ### `triage_issue`
 
 Triages GitHub issues and proposes routing metadata.
@@ -68,13 +82,45 @@ triage_issue(repo="owner/repo", issue_id=45)
 # Returns: "Issue #45 triaged: labeled 'bug', assigned to frontend team"
 ```
 
+Natural-language prompt example:
+
+```text
+Triage issue 45 in owner/repo using github-pro.
+```
+
 ### `assess_pr_risk`
 
-Scores pull request risk and returns an actionable review checklist.
+Scores pull request risk and returns an actionable review checklist (chat-side output).
 
 ```python
 assess_pr_risk(repo="owner/repo", pr_id=123)
 # Returns: "Risk score: 62/100 (high), key risk factors, and merge checklist"
+```
+
+Natural-language prompt example:
+
+```text
+Assess risk for PR 123 in owner/repo with github-pro.
+```
+
+## End-to-End Natural Language Examples (No curl)
+
+Use these prompts directly in your chat client with MCP enabled:
+
+```text
+With github-pro, review PR 123 in owner/repo and then assess the PR risk.
+```
+
+```text
+In owner/repo, triage issue 45 and then review PR 123 with github-pro.
+```
+
+```text
+Use github-pro to generate a React login component at src/components/Login.tsx in owner/repo, then review PR 123 and evaluate its risk.
+```
+
+```text
+Run the full flow with github-pro for owner/repo: triage issue 45, review PR 123, and assess PR risk.
 ```
 
 ## Tech Stack
@@ -104,6 +150,10 @@ pip install -r requirements.txt
 # Run
 python main.py
 ```
+
+## Smoke Testing
+
+- Use [SMOKE_TEST.md](SMOKE_TEST.md) for copy/paste checks of `initialize`, `tools/list`, `triage_issue`, and `review_pr`.
 
 ## Deploy Your Own
 
