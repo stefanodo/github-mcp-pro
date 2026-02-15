@@ -1,6 +1,8 @@
 from fastmcp import FastMCP
 from github import Github, Auth
 import os
+import re
+from urllib.parse import quote
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -20,11 +22,55 @@ def review_pr(repo: str, pr_id: int) -> str:
         files = list(pr.get_files())
         issues_found = []
         lint_findings = []
+        lint_seen = set()
+        pr_blob_base = f"https://github.com/{repo}/blob/{pr.head.sha}"
 
-        def add_lint(severity: str, message: str):
-            entry = f"{severity.upper()}: {message}"
-            if entry not in lint_findings:
-                lint_findings.append(entry)
+        def extract_added_lines_with_numbers(patch_text: str):
+            added = []
+            current_new_line = None
+
+            for raw in patch_text.splitlines():
+                if raw.startswith('@@'):
+                    hunk_match = re.search(r"\+(\d+)(?:,(\d+))?", raw)
+                    if hunk_match:
+                        current_new_line = int(hunk_match.group(1))
+                    continue
+
+                if current_new_line is None:
+                    continue
+
+                if raw.startswith('+++') or raw.startswith('---'):
+                    continue
+
+                if raw.startswith('+'):
+                    added.append((current_new_line, raw[1:]))
+                    current_new_line += 1
+                elif raw.startswith('-'):
+                    continue
+                else:
+                    current_new_line += 1
+
+            return added
+
+        def add_lint(severity: str, filename: str, line_number: int, message: str):
+            key = (severity.upper(), filename, line_number, message)
+            if key in lint_seen:
+                return
+            lint_seen.add(key)
+
+            safe_path = quote(filename, safe='/')
+            if line_number:
+                link = f"[{filename}:{line_number}]({pr_blob_base}/{safe_path}#L{line_number})"
+            else:
+                link = f"[{filename}]({pr_blob_base}/{safe_path})"
+
+            lint_findings.append({
+                "severity": severity.upper(),
+                "message": message,
+                "filename": filename,
+                "line": line_number,
+                "link": link,
+            })
         
         # Analyze each file
         for file in files:
@@ -33,41 +79,66 @@ def review_pr(repo: str, pr_id: int) -> str:
                 
             patch = file.patch.lower()
             filename = file.filename
-            added_lines = [
-                line[1:] for line in file.patch.splitlines()
-                if line.startswith('+') and not line.startswith('+++')
-            ]
+            added_lines_with_numbers = extract_added_lines_with_numbers(file.patch)
+            added_lines = [line_text for _, line_text in added_lines_with_numbers]
             added_text = "\n".join(added_lines).lower()
+            comment_lines = [
+                (line_number, line_text) for line_number, line_text in added_lines_with_numbers
+                if line_text.strip().startswith(('#', '//', '/*', '*'))
+            ]
+            code_lines = [
+                (line_number, line_text) for line_number, line_text in added_lines_with_numbers
+                if line_text.strip() and not line_text.strip().startswith(('#', '//', '/*', '*'))
+            ]
             
             # Pattern detection (regex smart)
             if filename.endswith(('.js', '.jsx', '.ts', '.tsx')):
                 if 'console.log' in added_text:
                     issues_found.append(f"⚠️ {filename}: Remove console.log before merge")
-                    add_lint("minor", f"{filename}: debug statement (console.log) added")
-                if 'debugger' in added_text:
-                    add_lint("major", f"{filename}: debugger statement added")
-                if 'var ' in added_text:
-                    add_lint("minor", f"{filename}: use let/const instead of var")
-                if 'eslint-disable' in added_text:
-                    add_lint("major", f"{filename}: eslint-disable directive added")
+                    for line_number, line_text in code_lines:
+                        if 'console.log' in line_text.lower():
+                            add_lint("minor", filename, line_number, "debug statement (console.log) added")
+                for line_number, line_text in code_lines:
+                    if re.search(r"(?<!['\"])\bdebugger\b", line_text):
+                        add_lint("major", filename, line_number, "debugger statement added")
+                    if re.search(r"^\s*var\s+", line_text):
+                        add_lint("minor", filename, line_number, "use let/const instead of var")
+                for line_number, line_text in added_lines_with_numbers:
+                    if 'eslint-disable' in line_text.lower():
+                        add_lint("major", filename, line_number, "eslint-disable directive added")
                 if 'useeffect' in added_text and 'dependency' not in added_text:
                     issues_found.append(f"⚠️ {filename}: Check useEffect dependencies")
                 if 'any' in added_text and '.ts' in filename:
                     issues_found.append(f"💡 {filename}: Avoid 'any' type, use specific types")
-                    add_lint("major", f"{filename}: TypeScript 'any' introduced")
+                    for line_number, line_text in code_lines:
+                        if re.search(r"\bany\b", line_text):
+                            add_lint("major", filename, line_number, "TypeScript 'any' introduced")
 
             if filename.endswith('.py'):
-                if 'except:' in added_text:
-                    add_lint("major", f"{filename}: bare except detected")
-                if 'print(' in added_text and '/test' not in filename.lower() and '/tests' not in filename.lower():
-                    add_lint("info", f"{filename}: print() added outside tests")
+                for line_number, line_text in code_lines:
+                    if re.search(r"^\s*except\s*:\s*$", line_text):
+                        add_lint("major", filename, line_number, "bare except detected")
+                if '/test' not in filename.lower() and '/tests' not in filename.lower():
+                    for line_number, line_text in code_lines:
+                        if re.search(r"(?<!['\"])\bprint\s*\(", line_text):
+                            add_lint("info", filename, line_number, "print() added outside tests")
 
-            if 'eval(' in added_text:
-                add_lint("critical", f"{filename}: eval usage detected")
-            if 'password =' in added_text or 'api_key' in added_text or 'secret =' in added_text:
-                add_lint("critical", f"{filename}: potential hardcoded secret pattern")
-            if 'todo' in added_text or 'fixme' in added_text:
-                add_lint("info", f"{filename}: TODO/FIXME added")
+            for line_number, line_text in code_lines:
+                if re.search(r"(?<!['\"])\beval\s*\(", line_text):
+                    add_lint("critical", filename, line_number, "eval usage detected")
+
+            secret_assignment_regex = re.compile(
+                r"^\s*(?:const\s+|let\s+|var\s+)?[A-Za-z_][A-Za-z0-9_]*(?:password|secret|api[_-]?key|token)[A-Za-z0-9_]*\s*=\s*['\"][^'\"]{4,}['\"]",
+                re.IGNORECASE,
+            )
+            token_literal_regex = re.compile(r"(ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})")
+            for line_number, line_text in code_lines:
+                if secret_assignment_regex.search(line_text) or token_literal_regex.search(line_text):
+                    add_lint("critical", filename, line_number, "potential hardcoded secret pattern")
+
+            for line_number, line_text in comment_lines:
+                if re.search(r"\b(todo|fixme)\b", line_text, flags=re.IGNORECASE):
+                    add_lint("info", filename, line_number, "TODO/FIXME added")
             
             if '+import' in patch and filename.count('/') > 3:
                 issues_found.append(f"💡 {filename}: Deep imports detected, consider barrel exports")
@@ -132,12 +203,17 @@ def review_pr(repo: str, pr_id: int) -> str:
 
         if lint_findings:
             severity_order = {"CRITICAL": 0, "MAJOR": 1, "MINOR": 2, "INFO": 3}
-            lint_findings.sort(key=lambda item: severity_order.get(item.split(':', 1)[0], 99))
+            lint_findings.sort(
+                key=lambda item: (
+                    severity_order.get(item["severity"], 99),
+                    item["filename"],
+                    item["line"],
+                )
+            )
             lint_counts = {"CRITICAL": 0, "MAJOR": 0, "MINOR": 0, "INFO": 0}
             for finding in lint_findings:
-                key = finding.split(':', 1)[0]
-                if key in lint_counts:
-                    lint_counts[key] += 1
+                if finding["severity"] in lint_counts:
+                    lint_counts[finding["severity"]] += 1
 
             summary += (
                 "🧹 **Lint Findings**: "
@@ -146,7 +222,10 @@ def review_pr(repo: str, pr_id: int) -> str:
                 f"minor {lint_counts['MINOR']}, "
                 f"info {lint_counts['INFO']}\n"
             )
-            summary += "\n**Top Lint Alerts**:\n" + "\n".join([f"- {finding}" for finding in lint_findings[:8]]) + "\n\n"
+            summary += "\n**Top Lint Alerts**:\n"
+            for finding in lint_findings[:8]:
+                summary += f"- {finding['severity']}: {finding['message']} at {finding['link']}\n"
+            summary += "\n"
         
         if issues_found:
             summary += "**Issues & Suggestions**:\n" + "\n".join([f"- {issue}" for issue in issues_found[:10]])
