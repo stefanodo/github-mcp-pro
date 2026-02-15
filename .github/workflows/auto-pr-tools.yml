@@ -8,10 +8,10 @@ on:
     types: [opened, reopened, synchronize, ready_for_review]
 
 permissions:
-  contents: write
+    contents: write
     statuses: write
-  issues: write
-  pull-requests: write
+    issues: write
+    pull-requests: write
 
 jobs:
   run-tools:
