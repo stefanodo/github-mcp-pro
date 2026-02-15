@@ -38,3 +38,8 @@ jobs:
         run: |
           # Skip B104 because host bind value is controlled via env and guarded by auth warning.
           bandit main.py -ii -s B104
+
+      - name: Run security self-checks
+        env:
+          GITHUB_TOKEN: ghp_exampletoken1234567890
+        run: python scripts/security_selfcheck.py
