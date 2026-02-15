@@ -17,7 +17,7 @@ def review_pr(repo: str, pr_id: int) -> str:
         gh_repo = g.get_repo(repo)
         pr = gh_repo.get_pull(pr_id)
         
-        files = pr.get_files()
+        files = list(pr.get_files())
         issues_found = []
         
         # Analyze each file

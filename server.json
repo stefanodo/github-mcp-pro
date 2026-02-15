@@ -5,7 +5,7 @@
   "description": "Advanced GitHub AI: PR review, code gen, triage",
   "version": "1.0.0",
   "icon": "https://github.com/favicon.ico",
-  "remotes": [{"url": "https://stefano-mcp-pro.fly.dev", "transport": "http"}],
+  "remotes": [{"url": "https://stefano-mcp-pro.fly.dev/mcp", "transport": "http"}],
   "metadata": {
     "repository": "https://github.com/stefanodo/github-mcp-pro",
     "license": "MIT",

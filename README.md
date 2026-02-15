@@ -8,7 +8,7 @@ MCP server for GitHub workflows: automated PR reviews, repository-aware code gen
 ✅ **Issue Triage**: Auto-labeling (bug/feature/docs/priority) with keyword detection  
 ✅ **Code Templates**: React components, hooks, API routes generation  
 🔄 **Coming Soon**: Full AI analysis with Claude integration (Plan C)
-- **Live Endpoint**: [https://stefano-mcp-pro.fly.dev](https://stefano-mcp-pro.fly.dev)
+- **Live Endpoint**: [https://stefano-mcp-pro.fly.dev/mcp](https://stefano-mcp-pro.fly.dev/mcp)
 
 ## Quick Start
 
@@ -31,7 +31,7 @@ Add to `claude_desktop_config.json`:
 {
   "mcpServers": {
     "github-pro": {
-      "url": "https://stefano-mcp-pro.fly.dev",
+      "url": "https://stefano-mcp-pro.fly.dev/mcp",
       "transport": "http"
     }
   }
