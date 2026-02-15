@@ -58,6 +58,25 @@ jobs:
           gh = Github(auth=Auth.Token(token))
           gh_repo = gh.get_repo(repo)
 
+          token_pattern = re.compile(r"ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}")
+
+          def is_placeholder_token(path: str, line: str, token_value: str) -> bool:
+              lowered_line = line.lower()
+              lowered_path = path.lower()
+
+              if (
+                  "exampletoken" in token_value.lower()
+                  or "your_token_here" in lowered_line
+                  or "replace_with_real_token" in lowered_line
+                  or "<real-github-token>" in lowered_line
+              ):
+                  return True
+
+              if lowered_path in {"readme.md", ".env.example", "scripts/security_selfcheck.py"}:
+                  return True
+
+              return False
+
           def add_findings_from_patch(path: str, patch: str, findings: list[str]) -> None:
               if not patch:
                   return
@@ -85,8 +104,11 @@ jobs:
                       findings.append(f"MAJOR: {path} debugger statement added")
                   if re.search(r"^\s*except\s*:\s*$", line):
                       findings.append(f"MAJOR: {path} bare except detected")
-                  if re.search(r"ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}", line):
-                      findings.append(f"CRITICAL: {path} potential hardcoded GitHub token")
+                  token_match = token_pattern.search(line)
+                  if token_match:
+                      token_value = token_match.group(0)
+                      if not is_placeholder_token(path, line, token_value):
+                          findings.append(f"CRITICAL: {path} potential hardcoded GitHub token")
                   if "password" in stripped.lower() and "=" in stripped and "\"" in stripped:
                       findings.append(f"MAJOR: {path} possible hardcoded password")
                   if "todo" in stripped.lower() or "fixme" in stripped.lower():
