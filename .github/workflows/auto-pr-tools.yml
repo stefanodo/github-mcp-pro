@@ -51,86 +51,119 @@ jobs:
           repo = os.environ["REPO"]
           token = os.environ["GITHUB_TOKEN"]
           ref_name = os.environ.get("REF_NAME", "")
-            before_sha = os.environ.get("BEFORE_SHA", "")
-            head_sha = os.environ.get("HEAD_SHA", "")
+          before_sha = os.environ.get("BEFORE_SHA", "")
+          head_sha = os.environ.get("HEAD_SHA", "")
 
           gh = Github(auth=Auth.Token(token))
           gh_repo = gh.get_repo(repo)
 
-            def add_findings_from_patch(path: str, patch: str, findings: list[str]):
+          def add_findings_from_patch(path: str, patch: str, findings: list[str]) -> None:
               if not patch:
-                return
+                  return
 
               lowered = patch.lower()
               if "console.log" in lowered:
-                findings.append(f"MINOR: {path} contains console.log")
+                  findings.append(f"MINOR: {path} contains console.log")
 
               for raw in patch.splitlines():
-                if not raw.startswith("+") or raw.startswith("+++"):
-                  continue
-                line = raw[1:]
-                stripped = line.strip()
+                  if not raw.startswith("+") or raw.startswith("+++"):
+                      continue
 
-                if re.search(r"(?<!['\"])\\beval\\s*\\(", line):
-                  findings.append(f"CRITICAL: {path} eval() added")
-                if re.search(r"(?<!['\"])\\bdebugger\\b", line):
-                  findings.append(f"MAJOR: {path} debugger statement added")
-                if re.search(r"^\\s*except\\s*:\\s*$", line):
-                  findings.append(f"MAJOR: {path} bare except detected")
-                if re.search(r"ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}", line):
-                  findings.append(f"CRITICAL: {path} potential hardcoded GitHub token")
-                if "password" in stripped.lower() and "=" in stripped and "\"" in stripped:
-                  findings.append(f"MAJOR: {path} possible hardcoded password")
-                if "todo" in stripped.lower() or "fixme" in stripped.lower():
-                  findings.append(f"INFO: {path} TODO/FIXME added")
+                  line = raw[1:]
+                  stripped = line.strip()
 
-            def run_branch_commit_feedback() -> None:
+                  if re.search(r"(?<!['\"])\beval\s*\(", line):
+                      findings.append(f"CRITICAL: {path} eval() added")
+                  if re.search(r"(?<!['\"])\bdebugger\b", line):
+                      findings.append(f"MAJOR: {path} debugger statement added")
+                  if re.search(r"^\s*except\s*:\s*$", line):
+                      findings.append(f"MAJOR: {path} bare except detected")
+                  if re.search(r"ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}", line):
+                      findings.append(f"CRITICAL: {path} potential hardcoded GitHub token")
+                  if "password" in stripped.lower() and "=" in stripped and "\"" in stripped:
+                      findings.append(f"MAJOR: {path} possible hardcoded password")
+                  if "todo" in stripped.lower() or "fixme" in stripped.lower():
+                      findings.append(f"INFO: {path} TODO/FIXME added")
+
+          def summarize_findings(findings: list[str]) -> Counter:
+              counts = Counter()
+              for finding in findings:
+                  if finding.startswith("CRITICAL"):
+                      counts["critical"] += 1
+                  elif finding.startswith("MAJOR"):
+                      counts["major"] += 1
+                  elif finding.startswith("MINOR"):
+                      counts["minor"] += 1
+                  else:
+                      counts["info"] += 1
+              return counts
+
+          def post_quality_gate(commit_sha: str, counts: Counter, scope: str) -> bool:
+              critical_count = counts.get("critical", 0)
+              commit = gh_repo.get_commit(commit_sha)
+
+              if critical_count > 0:
+                  commit.create_status(
+                      state="failure",
+                      description=f"MCP quality gate failed: {critical_count} critical finding(s)",
+                      context="github-mcp-pro/quality-gate",
+                  )
+                  print(f"Quality gate failed for {scope}: {critical_count} critical finding(s).")
+                  return False
+
+              commit.create_status(
+                  state="success",
+                  description="MCP quality gate passed",
+                  context="github-mcp-pro/quality-gate",
+              )
+              print(f"Quality gate passed for {scope}.")
+              return True
+
+          def run_branch_commit_feedback() -> None:
+              commit = gh_repo.get_commit(head_sha)
+
               if not before_sha or before_sha == "0000000000000000000000000000000000000000":
-                print("No valid before SHA for compare. Skipping commit feedback.")
-                return
+                  commit.create_status(
+                      state="success",
+                      description="MCP branch feedback skipped (no compare base)",
+                      context="github-mcp-pro/branch-feedback",
+                  )
+                  print("No valid before SHA for compare. Skipping branch feedback.")
+                  return
 
               comparison = gh_repo.compare(before_sha, head_sha)
               files = list(comparison.files)
               findings: list[str] = []
 
               for changed_file in files:
-                add_findings_from_patch(changed_file.filename, changed_file.patch or "", findings)
+                  add_findings_from_patch(changed_file.filename, changed_file.patch or "", findings)
 
-              counts = Counter()
-              for finding in findings:
-                if finding.startswith("CRITICAL"):
-                  counts["critical"] += 1
-                elif finding.startswith("MAJOR"):
-                  counts["major"] += 1
-                elif finding.startswith("MINOR"):
-                  counts["minor"] += 1
-                else:
-                  counts["info"] += 1
+              counts = summarize_findings(findings)
 
               header = "<!-- mcp-branch-feedback -->\n**🤖 Automated Branch Commit Feedback**"
               summary = (
-                f"- Branch: `{ref_name}`\n"
-                f"- Commit: `{head_sha[:12]}`\n"
-                f"- Files changed: {len(files)}\n"
-                f"- Findings: critical {counts['critical']}, major {counts['major']}, minor {counts['minor']}, info {counts['info']}"
+                  f"- Branch: `{ref_name}`\n"
+                  f"- Commit: `{head_sha[:12]}`\n"
+                  f"- Files changed: {len(files)}\n"
+                  f"- Findings: critical {counts['critical']}, major {counts['major']}, minor {counts['minor']}, info {counts['info']}"
               )
 
               if findings:
-                top = "\n".join(f"- {item}" for item in findings[:12])
+                  top = "\n".join(f"- {item}" for item in findings[:12])
               else:
-                top = "- No common risk/lint patterns detected in this commit range."
+                  top = "- No common risk/lint patterns detected in this commit range."
 
               body = f"{header}\n\n{summary}\n\n**Top findings**\n{top}"
 
-              commit = gh_repo.get_commit(head_sha)
               commit.create_comment(body)
               commit.create_status(
-                state="success",
-                description="MCP branch feedback posted",
-                context="github-mcp-pro/branch-feedback",
+                  state="success",
+                  description="MCP branch feedback posted",
+                  context="github-mcp-pro/branch-feedback",
               )
 
-              print("Branch commit feedback posted.")
+              if not post_quality_gate(head_sha, counts, "branch push"):
+                  sys.exit(1)
 
           if event_name == "pull_request":
               pr_id = int(os.environ["PR_ID"])
@@ -139,8 +172,8 @@ jobs:
               head_selector = f"{owner}:{ref_name}"
               pulls = list(gh_repo.get_pulls(state="open", head=head_selector))
               if not pulls:
-                print(f"No open PR found for branch '{ref_name}'. Running branch commit feedback.")
-                run_branch_commit_feedback()
+                  print(f"No open PR found for branch '{ref_name}'. Running branch commit feedback.")
+                  run_branch_commit_feedback()
                   sys.exit(0)
               pr_id = pulls[0].number
 
@@ -150,10 +183,9 @@ jobs:
           print(review_result)
           print(risk_result)
 
+          pr = gh_repo.get_pull(pr_id)
           marker = "<!-- mcp-risk-assessment -->"
           body = f"{marker}\n**🤖 Automated PR Risk Assessment**\n\n```text\n{risk_result}\n```"
-
-          pr = gh_repo.get_pull(pr_id)
 
           existing = None
           for comment in pr.get_issue_comments():
@@ -165,4 +197,12 @@ jobs:
               existing.edit(body)
           else:
               pr.create_issue_comment(body)
+
+          pr_findings: list[str] = []
+          for changed_file in pr.get_files():
+              add_findings_from_patch(changed_file.filename, changed_file.patch or "", pr_findings)
+
+          pr_counts = summarize_findings(pr_findings)
+          if not post_quality_gate(pr.head.sha, pr_counts, f"PR #{pr_id}"):
+              sys.exit(1)
           PY
