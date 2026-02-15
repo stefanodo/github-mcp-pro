@@ -9,6 +9,10 @@ MCP server for GitHub workflows: automated PR reviews, repository-aware code gen
 ✅ **Clickable Code Links**: Findings include direct GitHub links to file + exact line  
 ✅ **Inline PR Annotations**: Lint findings are also posted as inline comments in `Files changed`  
 ✅ **PR Risk Scoring**: Risk score (0-100), level, and merge checklist for each PR  
+✅ **PR Auto-Execution**: GitHub Actions runs review + risk tools on every PR update  
+✅ **Commit Auto-Execution**: On `push` to branch, tools run automatically if an open PR exists  
+✅ **No-PR Commit Feedback**: On `push` without PR, branch commit analysis is posted automatically  
+✅ **Quality Gate**: Fails the check automatically when `critical` findings are detected  
 ✅ **Issue Triage**: Auto-labeling (bug/feature/docs/priority) with keyword detection  
 ✅ **Code Templates**: React components, hooks, API routes generation  
 - **Live Endpoint**: [https://stefano-mcp-pro.fly.dev/mcp](https://stefano-mcp-pro.fly.dev/mcp)
@@ -154,6 +158,18 @@ python main.py
 ## Smoke Testing
 
 - Use [SMOKE_TEST.md](SMOKE_TEST.md) for copy/paste checks of `initialize`, `tools/list`, `triage_issue`, and `review_pr`.
+
+## PR Automation (No Manual Trigger)
+
+- Workflow: [.github/workflows/auto-pr-tools.yml](.github/workflows/auto-pr-tools.yml)
+- Trigger:
+  - `pull_request` (`opened`, `reopened`, `synchronize`, `ready_for_review`)
+  - `push` on non-`main` branches
+- Behavior:
+  - Runs `review_pr` automatically (summary + inline lint comments)
+  - Runs `assess_pr_risk` automatically (posts/updates a single risk comment)
+  - On `push` with no open PR, runs commit-range checks and posts commit feedback automatically
+  - Publishes `github-mcp-pro/quality-gate` status and fails workflow when critical findings exist
 
 ## Deploy Your Own
 
