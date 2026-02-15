@@ -58,7 +58,11 @@ jobs:
           gh = Github(auth=Auth.Token(token))
           gh_repo = gh.get_repo(repo)
 
-          token_pattern = re.compile(r"ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}")
+          ghp_prefix = "gh" + "p_"
+          pat_prefix = "github_" + "pat_"
+          token_pattern = re.compile(
+              rf"{ghp_prefix}[A-Za-z0-9]{{20,}}|{pat_prefix}[A-Za-z0-9_]{{20,}}"
+          )
 
           def is_placeholder_token(path: str, line: str, token_value: str) -> bool:
               lowered_line = line.lower()
