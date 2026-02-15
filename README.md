@@ -27,7 +27,7 @@ docker run -p 8000:8000 \
   stefanodo/github-mcp-pro
 
 # Test with inspector
-npx @modelcontextprotocol/inspector http://localhost:8000
+npx @modelcontextprotocol/inspector http://localhost:8000/mcp
 ```
 
 ### Claude Desktop Integration
@@ -64,7 +64,7 @@ Review PR 123 in owner/repo with github-pro.
 
 ### `generate_code`
 
-Generates code changes using repository context.
+Generates code templates based on prompt keywords.
 
 ```python
 generate_code(repo="owner/repo", path="src/App.js", prompt="Create login form")
@@ -79,11 +79,11 @@ With github-pro, generate code for owner/repo at src/App.js to create a login fo
 
 ### `triage_issue`
 
-Triages GitHub issues and proposes routing metadata.
+Triages GitHub issues and applies labels based on content.
 
 ```python
 triage_issue(repo="owner/repo", issue_id=45)
-# Returns: "Issue #45 triaged: labeled 'bug', assigned to frontend team"
+# Returns: "✅ Issue #45 triaged: Labels: bug, priority:high ..."
 ```
 
 Natural-language prompt example:
@@ -132,7 +132,7 @@ Run the full flow with github-pro for owner/repo: triage issue 45, review PR 123
 - Framework: FastMCP (Python 3.11)
 - API: PyGithub
 - Deploy: Fly.io (Paris region)
-- Protocol: MCP 2025-09-29 spec
+- Protocol: MCP 2025-11-25
 
 ## Pricing
 
@@ -159,6 +159,18 @@ python main.py
 
 - Use [SMOKE_TEST.md](SMOKE_TEST.md) for copy/paste checks of `initialize`, `tools/list`, `triage_issue`, and `review_pr`.
 
+## Release Checklist (README vs Code)
+
+Before each release, validate this quick checklist:
+
+- Endpoint paths match runtime (`/mcp` for local and production).
+- Documented tools match `tools/list` output exactly.
+- Tool descriptions/examples match real behavior in `main.py` (inputs + outputs).
+- Workflow triggers/permissions in docs match `.github/workflows/auto-pr-tools.yml`.
+- Quality gate rules and status names in docs match workflow contexts.
+- MCP protocol version in docs matches `initialize` response.
+- Smoke test commands in docs run without manual edits.
+
 ## PR Automation (No Manual Trigger)
 
 - Workflow: [.github/workflows/auto-pr-tools.yml](.github/workflows/auto-pr-tools.yml)
@@ -166,10 +178,12 @@ python main.py
   - `pull_request` (`opened`, `reopened`, `synchronize`, `ready_for_review`)
   - `push` on non-`main` branches
 - Behavior:
+  - Skips draft PRs automatically
   - Runs `review_pr` automatically (summary + inline lint comments)
   - Runs `assess_pr_risk` automatically (posts/updates a single risk comment)
   - On `push` with no open PR, runs commit-range checks and posts commit feedback automatically
   - Publishes `github-mcp-pro/quality-gate` status and fails workflow when critical findings exist
+  - Publishes `github-mcp-pro/branch-feedback` status for push feedback
 
 ## Deploy Your Own
 
