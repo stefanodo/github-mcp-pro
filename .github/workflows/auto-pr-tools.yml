@@ -73,6 +73,12 @@ jobs:
                   line = raw[1:]
                   stripped = line.strip()
 
+                  if "findings.append(" in stripped and (
+                      "eval() added" in stripped
+                      or "potential hardcoded GitHub token" in stripped
+                  ):
+                      continue
+
                   if re.search(r"(?<!['\"])\beval\s*\(", line):
                       findings.append(f"CRITICAL: {path} eval() added")
                   if re.search(r"(?<!['\"])\bdebugger\b", line):
