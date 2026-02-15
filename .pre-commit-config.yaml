@@ -1,0 +1,27 @@
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff (lint)
+        entry: python -m ruff check --fix --extend-ignore=F541,E741
+        language: system
+        types: [python]
+
+      - id: bandit-security
+        name: bandit (security)
+        entry: bandit -q -s B104 -x tests
+        language: system
+        types: [python]
+        files: ^main\.py$
+
+      - id: detect-secrets-baseline
+        name: detect-secrets (baseline)
+        entry: detect-secrets-hook --baseline .secrets.baseline
+        language: system
+
+      - id: gitleaks-local
+        name: gitleaks (staged)
+        entry: >-
+          bash -c 'if command -v gitleaks >/dev/null 2>&1; then gitleaks protect --staged --redact --config .gitleaks.toml; elif command -v docker >/dev/null 2>&1; then docker run --rm -v "$PWD:/repo" -w /repo zricethezav/gitleaks:latest detect --source . --no-git --redact --config .gitleaks.toml; else echo "gitleaks is required (install binary or Docker)"; exit 1; fi'
+        language: system
+        pass_filenames: false

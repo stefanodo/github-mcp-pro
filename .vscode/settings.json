@@ -1,5 +1,11 @@
 {
-	"python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+	"python.defaultInterpreterPath": "/Users/dellolio/github_mcp_pro/github-mcp-pro/.venv/bin/python",
+	"python.terminal.activateEnvironment": true,
+	"python.analysis.venvPath": "/Users/dellolio/github_mcp_pro/github-mcp-pro",
+	"python.analysis.venv": ".venv",
+	"python.analysis.extraPaths": [
+		"${workspaceFolder}"
+	],
 	"snyk.advanced.additionalParameters": "--command=/Users/dellolio/github_mcp_pro/github-mcp-pro/.venv/bin/python",
 	"terminal.integrated.env.osx": {
 		"PATH": "${workspaceFolder}/.venv/bin:${env:PATH}"

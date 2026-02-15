@@ -191,6 +191,42 @@ python -m unittest discover -s tests -p 'test_*.py'
 
 - These tests cover startup guards, token redaction, static token verification, and `scripts/security_selfcheck.py` execution.
 
+## Local Quality Gate (pre-commit)
+
+- Install local hook tooling:
+
+```bash
+python -m pip install pre-commit ruff bandit detect-secrets
+```
+
+- Install `gitleaks` either as a local binary or use Docker fallback:
+
+```bash
+# Option A: binary (if package manager available)
+gitleaks version
+
+# Option B: Docker fallback (no local gitleaks binary required)
+docker --version
+```
+
+- Install hooks:
+
+```bash
+pre-commit install
+```
+
+- Run the full gate locally:
+
+```bash
+pre-commit run --all-files
+```
+
+- Refresh the secrets baseline when intentional secret-like fixtures/templates are added:
+
+```bash
+detect-secrets scan > .secrets.baseline
+```
+
 ## Release Checklist (README vs Code)
 
 Before each release, validate this quick checklist:
