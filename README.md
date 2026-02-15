@@ -5,6 +5,7 @@ MCP server for GitHub workflows: automated PR reviews, repository-aware code gen
 ## Features (v1.0 - MVP)
 
 ✅ **Smart PR Review**: Pattern detection (console.log, useEffect deps, TypeScript any)  
+✅ **PR Risk Scoring**: Risk score (0-100), level, and merge checklist for each PR  
 ✅ **Issue Triage**: Auto-labeling (bug/feature/docs/priority) with keyword detection  
 ✅ **Code Templates**: React components, hooks, API routes generation  
 🔄 **Coming Soon**: Full AI analysis with Claude integration (Plan C)
@@ -65,6 +66,15 @@ Triages GitHub issues and proposes routing metadata.
 ```python
 triage_issue(repo="owner/repo", issue_id=45)
 # Returns: "Issue #45 triaged: labeled 'bug', assigned to frontend team"
+```
+
+### `assess_pr_risk`
+
+Scores pull request risk and returns an actionable review checklist.
+
+```python
+assess_pr_risk(repo="owner/repo", pr_id=123)
+# Returns: "Risk score: 62/100 (high), key risk factors, and merge checklist"
 ```
 
 ## Tech Stack

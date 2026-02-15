@@ -182,5 +182,137 @@ def triage_issue(repo: str, issue_id: int) -> str:
     except Exception as e:
         return f"❌ Error triaging issue: {str(e)}"
 
+@mcp.tool()
+def assess_pr_risk(repo: str, pr_id: int) -> str:
+    """Assesses PR risk score with actionable review checklist."""
+    try:
+        auth = Auth.Token(GITHUB_TOKEN)
+        g = Github(auth=auth)
+        gh_repo = g.get_repo(repo)
+        pr = gh_repo.get_pull(pr_id)
+
+        files = list(pr.get_files())
+        total_changes = pr.additions + pr.deletions
+        risk_score = 0
+        risk_factors = []
+
+        if len(files) > 15:
+            risk_score += 18
+            risk_factors.append(f"Large PR footprint: {len(files)} files changed")
+        elif len(files) > 8:
+            risk_score += 10
+            risk_factors.append(f"Medium-large PR: {len(files)} files changed")
+
+        if total_changes > 800:
+            risk_score += 18
+            risk_factors.append(f"High code churn: {total_changes} lines changed")
+        elif total_changes > 300:
+            risk_score += 10
+            risk_factors.append(f"Moderate code churn: {total_changes} lines changed")
+
+        sensitive_terms = [
+            'auth', 'security', 'permission', 'role', 'token', 'secret',
+            'billing', 'payment', 'database', 'schema', 'migration',
+            'deploy', 'infra', 'config', 'middleware', 'crypto'
+        ]
+
+        sensitive_files = []
+        test_files = 0
+        risky_signals = 0
+
+        for changed_file in files:
+            filename = changed_file.filename.lower()
+            patch = (changed_file.patch or '').lower()
+
+            if any(term in filename for term in sensitive_terms):
+                sensitive_files.append(changed_file.filename)
+
+            if (
+                '/test' in filename
+                or '/tests' in filename
+                or filename.endswith('.test.js')
+                or filename.endswith('.test.ts')
+                or filename.endswith('.spec.js')
+                or filename.endswith('.spec.ts')
+                or filename.startswith('test_')
+            ):
+                test_files += 1
+
+            signal_map = {
+                'eval(': 'Dynamic evaluation detected (eval)',
+                'innerhtml': 'Potential XSS surface (innerHTML)',
+                'dangerouslysetinnerhtml': 'Potential XSS surface (dangerouslySetInnerHTML)',
+                'os.system(': 'Shell execution detected (os.system)',
+                'subprocess.': 'Process execution detected (subprocess)',
+                'drop table': 'Destructive SQL statement in patch',
+                'alter table': 'Schema mutation in patch',
+                'chmod 777': 'Overly permissive file mode',
+                'skip(ci)': 'CI skip marker detected'
+            }
+
+            for pattern, message in signal_map.items():
+                if pattern in patch:
+                    risky_signals += 1
+                    if message not in risk_factors:
+                        risk_factors.append(message)
+
+        if sensitive_files:
+            sensitive_bonus = min(24, 8 + (len(sensitive_files) * 4))
+            risk_score += sensitive_bonus
+            risk_factors.append(
+                f"Sensitive surface touched: {len(sensitive_files)} file(s)"
+            )
+
+        if risky_signals:
+            risk_score += min(20, risky_signals * 4)
+
+        non_test_files = max(0, len(files) - test_files)
+        if non_test_files > 0 and test_files == 0:
+            risk_score += 12
+            risk_factors.append("No test files changed")
+
+        risk_score = min(100, risk_score)
+
+        if risk_score >= 70:
+            risk_level = "critical"
+        elif risk_score >= 45:
+            risk_level = "high"
+        elif risk_score >= 25:
+            risk_level = "medium"
+        else:
+            risk_level = "low"
+
+        checklist = [
+            "Run full CI and verify no skipped checks",
+            "Verify rollback path for this change",
+            "Confirm monitoring/alerts impacted by this PR"
+        ]
+
+        if sensitive_files:
+            checklist.append("Request security-focused review for sensitive files")
+        if any('database' in file.lower() or 'migration' in file.lower() for file in sensitive_files):
+            checklist.append("Validate migration safety and backward compatibility")
+        if test_files == 0 and non_test_files > 0:
+            checklist.append("Add or request tests before merge")
+
+        report = f"✅ PR #{pr_id} Risk Assessment\n"
+        report += f"- Risk score: {risk_score}/100 ({risk_level})\n"
+        report += f"- Scope: {len(files)} files, {pr.additions} additions, {pr.deletions} deletions\n"
+        report += f"- Test files changed: {test_files}\n"
+
+        if risk_factors:
+            report += "- Key risk factors:\n"
+            for factor in risk_factors[:8]:
+                report += f"  - {factor}\n"
+
+        report += "- Recommended checklist:\n"
+        for item in checklist[:6]:
+            report += f"  - {item}\n"
+
+        return report.strip()
+
+    except Exception as e:
+        return f"❌ Error assessing PR risk: {str(e)}"
+
 if __name__ == "__main__":
     mcp.run(transport="http", host="0.0.0.0", port=8000)
