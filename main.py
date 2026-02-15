@@ -4,11 +4,13 @@ import os
 import re
 import hashlib
 import hmac
+import logging
 from urllib.parse import quote
 from dotenv import load_dotenv
 from fastmcp.server.auth.auth import TokenVerifier, AccessToken
 
 load_dotenv()
+logger = logging.getLogger(__name__)
 
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 MCP_AUTH_TOKEN = os.getenv("MCP_AUTH_TOKEN")
@@ -344,9 +346,21 @@ def review_pr(repo: str, pr_id: int) -> str:
                     )
                     inline_posted += 1
                     existing_markers.add(marker)
-                except Exception:
+                except Exception as inline_error:
+                    logger.warning(
+                        "Failed to create inline review comment",
+                        extra={
+                            "file": finding.get("filename"),
+                            "line": finding.get("line"),
+                            "error": _sanitize_error(str(inline_error)),
+                        },
+                    )
                     continue
-        except Exception:
+        except Exception as review_comments_error:
+            logger.warning(
+                "Failed while processing existing review comments",
+                extra={"error": _sanitize_error(str(review_comments_error))},
+            )
             inline_posted = 0
         
         # Post comment
@@ -582,6 +596,9 @@ def assess_pr_risk(repo: str, pr_id: int) -> str:
         return f"❌ Error assessing PR risk: {_sanitize_error(str(e))}"
 
 if __name__ == "__main__":
+    logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO").upper())
     host = os.getenv("HOST", "127.0.0.1")
     port = int(os.getenv("PORT", "8000"))
+    if host == "0.0.0.0" and not MCP_AUTH_TOKEN:
+        logger.warning("Server is bound publicly without MCP bearer auth token configured")
     mcp.run(transport="http", host=host, port=port)
