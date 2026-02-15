@@ -1,0 +1,86 @@
+name: Auto PR Tools
+
+on:
+  push:
+    branches-ignore:
+      - main
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  run-tools:
+    if: github.event_name == 'push' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run automated MCP tools
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          REPO: ${{ github.repository }}
+          PR_ID: ${{ github.event.pull_request.number }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          python - <<'PY'
+          import os
+          import sys
+          from github import Github, Auth
+          from main import review_pr, assess_pr_risk
+
+          event_name = os.environ["EVENT_NAME"]
+          repo = os.environ["REPO"]
+          token = os.environ["GITHUB_TOKEN"]
+          ref_name = os.environ.get("REF_NAME", "")
+
+          gh = Github(auth=Auth.Token(token))
+          gh_repo = gh.get_repo(repo)
+
+          if event_name == "pull_request":
+              pr_id = int(os.environ["PR_ID"])
+          else:
+              owner = repo.split("/")[0]
+              head_selector = f"{owner}:{ref_name}"
+              pulls = list(gh_repo.get_pulls(state="open", head=head_selector))
+              if not pulls:
+                  print(f"No open PR found for branch '{ref_name}'. Skipping MCP tools.")
+                  sys.exit(0)
+              pr_id = pulls[0].number
+
+          review_result = review_pr(repo=repo, pr_id=pr_id)
+          risk_result = assess_pr_risk(repo=repo, pr_id=pr_id)
+
+          print(review_result)
+          print(risk_result)
+
+          marker = "<!-- mcp-risk-assessment -->"
+          body = f"{marker}\n**🤖 Automated PR Risk Assessment**\n\n```text\n{risk_result}\n```"
+
+          pr = gh_repo.get_pull(pr_id)
+
+          existing = None
+          for comment in pr.get_issue_comments():
+              if comment.body and marker in comment.body:
+                  existing = comment
+                  break
+
+          if existing:
+              existing.edit(body)
+          else:
+              pr.create_issue_comment(body)
+          PY
