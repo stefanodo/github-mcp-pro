@@ -40,9 +40,12 @@ jobs:
           bandit main.py -ii -s B104
 
       # Ensure dependencies are installed before running security self-checks
+      - name: Ensure FastAPI is installed
+        run: python -c "import fastapi; print('FastAPI is installed:', fastapi.__version__)"
+
       - name: Run security self-checks
         env:
           GITHUB_TOKEN: ci_selfcheck_token_value_12345
         run: |
           # Dependencies (like fastapi) must be installed for this script to work
-          python scripts/security_selfcheck.py
+          python -m scripts.security_selfcheck
