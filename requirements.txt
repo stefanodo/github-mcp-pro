@@ -86,3 +86,4 @@ websockets==16.0
 zipp==3.23.0
 
 anyio>=3.7,<5
+itsdangerous>=2.0,<3.0
