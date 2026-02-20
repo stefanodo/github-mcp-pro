@@ -39,7 +39,10 @@ jobs:
           # Skip B104 because host bind value is controlled via env and guarded by auth warning.
           bandit main.py -ii -s B104
 
+      # Ensure dependencies are installed before running security self-checks
       - name: Run security self-checks
         env:
           GITHUB_TOKEN: ci_selfcheck_token_value_12345
-        run: python scripts/security_selfcheck.py
+        run: |
+          # Dependencies (like fastapi) must be installed for this script to work
+          python scripts/security_selfcheck.py
