@@ -42,7 +42,7 @@ oauth.register(
     name='github',
     client_id=GITHUB_CLIENT_ID,
     client_secret=GITHUB_CLIENT_SECRET,
-    access_token_url='https://github.com/login/oauth/access_token',
+    access_token_url='https://github.com/login/oauth/access_token', # nosec
     access_token_params=None,
     authorize_url='https://github.com/login/oauth/authorize',
     authorize_params=None,
