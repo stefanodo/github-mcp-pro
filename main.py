@@ -22,7 +22,11 @@ logger = logging.getLogger(__name__)
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key")
 GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID", "")
 GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET", "")
+
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
+REQUIRE_MCP_AUTH = os.getenv("REQUIRE_MCP_AUTH", "false").lower() == "true"
+MCP_AUTH_TOKEN = os.getenv("MCP_AUTH_TOKEN", "")
+
 
 # Security self-check and tests expect this guard:
 if not GITHUB_TOKEN:
@@ -31,6 +35,8 @@ if GITHUB_TOKEN == "your_token_here":  # nosec
     raise RuntimeError("GITHUB_TOKEN is set to a placeholder value")
 if not GITHUB_CLIENT_ID or not GITHUB_CLIENT_SECRET:
     raise RuntimeError("GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET must be set for OAuth.")
+if REQUIRE_MCP_AUTH and not MCP_AUTH_TOKEN:
+    raise RuntimeError("REQUIRE_MCP_AUTH is enabled but MCP_AUTH_TOKEN is missing")
 
 app = FastAPI()
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
