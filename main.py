@@ -1,3 +1,10 @@
+# --- Error redaction utility for security self-check ---
+import re
+
+def _sanitize_error(msg: str) -> str:
+    # Redact GitHub tokens (ghp_...) and similar patterns
+    token_pattern = re.compile(r"ghp_[A-Za-z0-9]{32,}")
+    return token_pattern.sub("[REDACTED_TOKEN]", msg)
 # --- Multi-tenant FastAPI app with GitHub OAuth ---
 import os
 import re
