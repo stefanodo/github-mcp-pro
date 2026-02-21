@@ -212,8 +212,8 @@ jobs:
                           sys.exit(0)
                       pr_id = pulls[0].number
 
-                  review_result = review_pr.fn(repo=repo, pr_id=pr_id)
-                  risk_result = assess_pr_risk.fn(repo=repo, pr_id=pr_id)
+                  review_result = review_pr(repo=repo, pr_id=pr_id)
+                  risk_result = assess_pr_risk(repo=repo, pr_id=pr_id)
 
                   print(review_result)
                   print(risk_result)
