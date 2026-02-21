@@ -1,25 +1,3 @@
-    # --- All imports at the top ---
-import os
-import re
-import hashlib
-import hmac
-import logging
-from urllib.parse import quote
-from typing import Optional
-from dotenv import load_dotenv
-from fastapi import FastAPI, Request, Response, Depends, HTTPException
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
-from fastapi.responses import RedirectResponse, HTMLResponse
-from starlette.middleware.sessions import SessionMiddleware
-from starlette.config import Config
-from starlette.middleware.cors import CORSMiddleware
-from authlib.integrations.starlette_client import OAuth, OAuthError
-from github import Github
-
-# --- Load env and assign variables ---
-
 
 # --- Early dotenv load and auth guard: must be first ---
 import os
@@ -37,7 +15,6 @@ import hmac
 import logging
 from urllib.parse import quote
 from typing import Optional
-from dotenv import load_dotenv
 from fastapi import FastAPI, Request, Response, Depends, HTTPException
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -50,7 +27,6 @@ from authlib.integrations.starlette_client import OAuth, OAuthError
 from github import Github
 
 # --- Load env and assign variables ---
-load_dotenv()
 logger = logging.getLogger(__name__)
 
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key")
