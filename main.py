@@ -2,9 +2,12 @@
 # --- Early dotenv load and auth guard: must be first ---
 import os
 from dotenv import load_dotenv
+# Load environment and print debug info for CI/CD
 load_dotenv()
-REQUIRE_MCP_AUTH = os.getenv("REQUIRE_MCP_AUTH", "false").lower() == "true"
+REQUIRE_MCP_AUTH_RAW = os.getenv("REQUIRE_MCP_AUTH", "false")
+REQUIRE_MCP_AUTH = REQUIRE_MCP_AUTH_RAW.lower() == "true"
 MCP_AUTH_TOKEN = os.getenv("MCP_AUTH_TOKEN", "")
+print(f"[DEBUG] REQUIRE_MCP_AUTH_RAW={REQUIRE_MCP_AUTH_RAW!r} REQUIRE_MCP_AUTH={REQUIRE_MCP_AUTH!r} MCP_AUTH_TOKEN={MCP_AUTH_TOKEN!r}")
 
 # Guard: fail if REQUIRE_MCP_AUTH is enabled but MCP_AUTH_TOKEN is missing or only whitespace
 if REQUIRE_MCP_AUTH and not (MCP_AUTH_TOKEN and MCP_AUTH_TOKEN.strip()):
