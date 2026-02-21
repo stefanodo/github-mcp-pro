@@ -19,6 +19,34 @@ from authlib.integrations.starlette_client import OAuth, OAuthError
 from github import Github
 
 # --- Load env and assign variables ---
+
+# --- Early auth guard: must be first ---
+import os
+REQUIRE_MCP_AUTH = os.getenv("REQUIRE_MCP_AUTH", "false").lower() == "true"
+MCP_AUTH_TOKEN = os.getenv("MCP_AUTH_TOKEN", "")
+if REQUIRE_MCP_AUTH and not MCP_AUTH_TOKEN:
+    raise RuntimeError("REQUIRE_MCP_AUTH is enabled but MCP_AUTH_TOKEN is missing")
+
+# --- All imports at the top ---
+import re
+import hashlib
+import hmac
+import logging
+from urllib.parse import quote
+from typing import Optional
+from dotenv import load_dotenv
+from fastapi import FastAPI, Request, Response, Depends, HTTPException
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from fastapi.responses import RedirectResponse, HTMLResponse
+from starlette.middleware.sessions import SessionMiddleware
+from starlette.config import Config
+from starlette.middleware.cors import CORSMiddleware
+from authlib.integrations.starlette_client import OAuth, OAuthError
+from github import Github
+
+# --- Load env and assign variables ---
 load_dotenv()
 logger = logging.getLogger(__name__)
 
@@ -31,33 +59,6 @@ if GITHUB_TOKEN in ("your_token_here", "ci_selfcheck_token_value_12345"):
     raise RuntimeError("GITHUB_TOKEN is set to a placeholder value")
 if not GITHUB_TOKEN:
     raise RuntimeError("Missing required GITHUB_TOKEN")
-
-REQUIRE_MCP_AUTH = os.getenv("REQUIRE_MCP_AUTH", "false").lower() == "true"
-MCP_AUTH_TOKEN = os.getenv("MCP_AUTH_TOKEN", "")
-# Guard: fail if REQUIRE_MCP_AUTH is enabled but MCP_AUTH_TOKEN is missing
-if REQUIRE_MCP_AUTH and not MCP_AUTH_TOKEN:
-    raise RuntimeError("REQUIRE_MCP_AUTH is enabled but MCP_AUTH_TOKEN is missing")
-
-# --- Restrict CORS to trusted domains (comma-separated in env) ---
-cors_origins = os.getenv("CORS_ALLOW_ORIGINS")
-if cors_origins:
-    allowed_origins = [o.strip() for o in cors_origins.split(",") if o.strip()]
-else:
-    allowed_origins = ["https://stefano-mcp-pro.fly.dev"] if os.getenv("ENV") == "production" else ["*"]
-
-# --- Rate limiting and app setup ---
-limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
-app = FastAPI()
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # --- OAuth setup ---
 config = Config(environ=os.environ)
