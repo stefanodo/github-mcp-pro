@@ -5,9 +5,12 @@ from dotenv import load_dotenv
 load_dotenv()
 REQUIRE_MCP_AUTH = os.getenv("REQUIRE_MCP_AUTH", "false").lower() == "true"
 MCP_AUTH_TOKEN = os.getenv("MCP_AUTH_TOKEN", "")
+
 # Guard: fail if REQUIRE_MCP_AUTH is enabled but MCP_AUTH_TOKEN is missing or only whitespace
 if REQUIRE_MCP_AUTH and not (MCP_AUTH_TOKEN and MCP_AUTH_TOKEN.strip()):
     raise RuntimeError("REQUIRE_MCP_AUTH is enabled but MCP_AUTH_TOKEN is missing")
+
+# Guard: fail if GITHUB_TOKEN is missing or a known placeholder
 
 # --- All imports at the top ---
 import re
