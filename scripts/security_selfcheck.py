@@ -30,7 +30,7 @@ def _run_import_with_env(env_overrides: dict[str, str | None]) -> tuple[int, str
 def _assert_startup_guards() -> None:
     code, output = _run_import_with_env(
         {
-            "GITHUB_TOKEN": "",
+            "GITHUB_TOKEN": None,  # Fully unset the variable
             "MCP_AUTH_TOKEN": None,
             "REQUIRE_MCP_AUTH": "false",
         }
