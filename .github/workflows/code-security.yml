@@ -44,6 +44,8 @@ jobs:
       - name: Run security self-checks
         env:
           GITHUB_TOKEN: ci_selfcheck_token_value_12345
+          GITHUB_CLIENT_ID: dummy_id
+          GITHUB_CLIENT_SECRET: dummy_secret
         run: |
           # Dependencies (like fastapi) must be installed for this script to work
           python -m scripts.security_selfcheck
