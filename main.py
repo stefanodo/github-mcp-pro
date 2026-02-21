@@ -20,8 +20,11 @@ from github import Github
 
 # --- Load env and assign variables ---
 
-# --- Early auth guard: must be first ---
+
+# --- Early dotenv load and auth guard: must be first ---
 import os
+from dotenv import load_dotenv
+load_dotenv()
 REQUIRE_MCP_AUTH = os.getenv("REQUIRE_MCP_AUTH", "false").lower() == "true"
 MCP_AUTH_TOKEN = os.getenv("MCP_AUTH_TOKEN", "")
 if REQUIRE_MCP_AUTH and not MCP_AUTH_TOKEN:
