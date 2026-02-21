@@ -28,11 +28,13 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
+      - name: Install dependencies and verify environment
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
           python -m pip install bandit
+          python -c "import fastapi; print('FastAPI is installed:', fastapi.__version__)"
+          python -m pip freeze
 
       - name: Run Bandit security scan
         run: |
@@ -42,4 +44,8 @@ jobs:
       - name: Run security self-checks
         env:
           GITHUB_TOKEN: ci_selfcheck_token_value_12345
-        run: python scripts/security_selfcheck.py
+          GITHUB_CLIENT_ID: dummy_id
+          GITHUB_CLIENT_SECRET: dummy_secret
+        run: |
+          # Dependencies (like fastapi) must be installed for this script to work
+          python -m scripts.security_selfcheck

@@ -31,14 +31,16 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run automated MCP tools
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          EVENT_NAME: ${{ github.event_name }}
-          REPO: ${{ github.repository }}
-          PR_ID: ${{ github.event.pull_request.number }}
-          REF_NAME: ${{ github.ref_name }}
-          BEFORE_SHA: ${{ github.event.before }}
-          HEAD_SHA: ${{ github.sha }}
+                env:
+                    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                    GITHUB_CLIENT_ID: dummy_id
+                    GITHUB_CLIENT_SECRET: dummy_secret
+                    EVENT_NAME: ${{ github.event_name }}
+                    REPO: ${{ github.repository }}
+                    PR_ID: ${{ github.event.pull_request.number }}
+                    REF_NAME: ${{ github.ref_name }}
+                    BEFORE_SHA: ${{ github.event.before }}
+                    HEAD_SHA: ${{ github.sha }}
         run: |
           python - <<'PY'
           import os
