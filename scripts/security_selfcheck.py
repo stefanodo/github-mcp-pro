@@ -64,26 +64,30 @@ def _assert_startup_guards() -> None:
     ), output
 
 
-def _assert_error_redaction() -> None:
-    import main  # noqa: PLC0415
 
-    sample = "leaked token " + "ghp_" + ("A" * 32)
-    redacted = main._sanitize_error(sample)
-    assert "ghp_" not in redacted
-    assert "[REDACTED_TOKEN]" in redacted
+def _assert_error_redaction() -> None:
+    # Run in subprocess with safe env so main.py guard does not trigger
+    env = os.environ.copy()
+    env["REQUIRE_MCP_AUTH"] = "false"
+    env["MCP_AUTH_TOKEN"] = "dummy"
+    code = subprocess.run([
+        sys.executable, "-c",
+        "import main; sample = 'leaked token ' + 'ghp_' + ('A' * 32); redacted = main._sanitize_error(sample); assert 'ghp_' not in redacted; assert '[REDACTED_TOKEN]' in redacted"
+    ], env=env, cwd=str(REPO_ROOT)).returncode
+    assert code == 0, "Error redaction test failed"
+
 
 
 async def _assert_static_token_verifier() -> None:
-    import main  # noqa: PLC0415
-
-    verifier = main.StaticTokenVerifier("expected-secret")
-
-    valid = await verifier.verify_token("expected-secret")
-    assert valid is not None
-    assert "mcp:access" in valid.scopes
-
-    invalid = await verifier.verify_token("wrong-secret")
-    assert invalid is None
+    # Run in subprocess with safe env so main.py guard does not trigger
+    env = os.environ.copy()
+    env["REQUIRE_MCP_AUTH"] = "false"
+    env["MCP_AUTH_TOKEN"] = "dummy"
+    code = subprocess.run([
+        sys.executable, "-c",
+        "import asyncio; import main; verifier = main.StaticTokenVerifier('expected-secret'); valid = asyncio.get_event_loop().run_until_complete(verifier.verify_token('expected-secret')); assert valid is not None and 'mcp:access' in valid.scopes; invalid = asyncio.get_event_loop().run_until_complete(verifier.verify_token('wrong-secret')); assert invalid is None"
+    ], env=env, cwd=str(REPO_ROOT)).returncode
+    assert code == 0, "StaticTokenVerifier test failed"
 
 
 def main_check() -> None:
