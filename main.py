@@ -27,7 +27,7 @@ GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
 # Security self-check and tests expect this guard:
 if not GITHUB_TOKEN:
     raise RuntimeError("Missing required GITHUB_TOKEN")
-if GITHUB_TOKEN == "your_token_here":
+if GITHUB_TOKEN == "your_token_here":  # nosec
     raise RuntimeError("GITHUB_TOKEN is set to a placeholder value")
 if not GITHUB_CLIENT_ID or not GITHUB_CLIENT_SECRET:
     raise RuntimeError("GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET must be set for OAuth.")
