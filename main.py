@@ -1,3 +1,121 @@
+# --- All imports at the top ---
+import os
+import re
+import hashlib
+import hmac
+import logging
+from urllib.parse import quote
+from typing import Optional
+from dotenv import load_dotenv
+from fastapi import FastAPI, Request, Response, Depends, HTTPException
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from fastapi.responses import RedirectResponse, HTMLResponse
+from starlette.middleware.sessions import SessionMiddleware
+from starlette.config import Config
+from starlette.middleware.cors import CORSMiddleware
+from authlib.integrations.starlette_client import OAuth, OAuthError
+from github import Github
+
+# --- Load env and assign variables ---
+load_dotenv()
+logger = logging.getLogger(__name__)
+SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key")
+GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID", "")
+GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET", "")
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
+REQUIRE_MCP_AUTH = os.getenv("REQUIRE_MCP_AUTH", "false").lower() == "true"
+MCP_AUTH_TOKEN = os.getenv("MCP_AUTH_TOKEN", "")
+
+# --- Restrict CORS to trusted domains (comma-separated in env) ---
+cors_origins = os.getenv("CORS_ALLOW_ORIGINS")
+if cors_origins:
+    allowed_origins = [o.strip() for o in cors_origins.split(",") if o.strip()]
+else:
+    allowed_origins = ["https://stefano-mcp-pro.fly.dev"] if os.getenv("ENV") == "production" else ["*"]
+
+# --- Rate limiting and app setup ---
+limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
+app = FastAPI()
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# --- OAuth setup ---
+config = Config(environ=os.environ)
+oauth = OAuth(config)
+oauth.register(
+    name='github',
+    client_id=GITHUB_CLIENT_ID,
+    client_secret=GITHUB_CLIENT_SECRET,
+    access_token_url='https://github.com/login/oauth/access_token', # nosec
+    access_token_params=None,
+    authorize_url='https://github.com/login/oauth/authorize',
+    authorize_params=None,
+    api_base_url='https://api.github.com/',
+    client_kwargs={'scope': 'repo user'},
+)
+
+
+
+from dotenv import load_dotenv
+import logging
+import os
+
+load_dotenv()
+logger = logging.getLogger(__name__)
+
+SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key")
+GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID", "")
+GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET", "")
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
+REQUIRE_MCP_AUTH = os.getenv("REQUIRE_MCP_AUTH", "false").lower() == "true"
+MCP_AUTH_TOKEN = os.getenv("MCP_AUTH_TOKEN", "")
+
+# Restrict CORS to trusted domains (comma-separated in env)
+cors_origins = os.getenv("CORS_ALLOW_ORIGINS")
+if cors_origins:
+    allowed_origins = [o.strip() for o in cors_origins.split(",") if o.strip()]
+else:
+    # Default: allow only production domain, fallback to all for dev
+    allowed_origins = ["https://stefano-mcp-pro.fly.dev"] if os.getenv("ENV") == "production" else ["*"]
+
+# --- Rate limiting setup ---
+limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
+app = FastAPI()
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Setup OAuth after env variables and app setup
+config = Config(environ=os.environ)
+oauth = OAuth(config)
+oauth.register(
+    name='github',
+    client_id=GITHUB_CLIENT_ID,
+    client_secret=GITHUB_CLIENT_SECRET,
+    access_token_url='https://github.com/login/oauth/access_token', # nosec
+    access_token_params=None,
+    authorize_url='https://github.com/login/oauth/authorize',
+    authorize_params=None,
+    api_base_url='https://api.github.com/',
+    client_kwargs={'scope': 'repo user'},
+)
 # --- StaticTokenVerifier for security self-check ---
 from typing import Optional
 
@@ -37,21 +155,20 @@ from starlette.middleware.cors import CORSMiddleware
 from authlib.integrations.starlette_client import OAuth, OAuthError
 from github import Github
 
+
 load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-
-
+# Environment variable assignments (must be before app/OAuth setup)
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key")
 GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID", "")
 GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET", "")
-
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
 REQUIRE_MCP_AUTH = os.getenv("REQUIRE_MCP_AUTH", "false").lower() == "true"
 MCP_AUTH_TOKEN = os.getenv("MCP_AUTH_TOKEN", "")
 
-# Restrict CORS to trusted domains (comma-separated in env)
+ # Restrict CORS to trusted domains (comma-separated in env)
 cors_origins = os.getenv("CORS_ALLOW_ORIGINS")
 if cors_origins:
     allowed_origins = [o.strip() for o in cors_origins.split(",") if o.strip()]
@@ -59,20 +176,8 @@ else:
     # Default: allow only production domain, fallback to all for dev
     allowed_origins = ["https://stefano-mcp-pro.fly.dev"] if os.getenv("ENV") == "production" else ["*"]
 
-
 # Security self-check and tests expect this guard:
-if not GITHUB_TOKEN:
-    raise RuntimeError("Missing required GITHUB_TOKEN")
-if GITHUB_TOKEN == "your_token_here":  # nosec
-    raise RuntimeError("GITHUB_TOKEN is set to a placeholder value")
-if not GITHUB_CLIENT_ID or not GITHUB_CLIENT_SECRET:
-    raise RuntimeError("GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET must be set for OAuth.")
-if REQUIRE_MCP_AUTH and not MCP_AUTH_TOKEN:
-    raise RuntimeError("REQUIRE_MCP_AUTH is enabled but MCP_AUTH_TOKEN is missing")
-
-
-
-# --- Rate limiting setup ---
+ # --- Rate limiting setup ---
 limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
 app = FastAPI()
 app.state.limiter = limiter
@@ -85,22 +190,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-config = Config(environ=os.environ)
-oauth = OAuth(config)
-oauth.register(
-    name='github',
-    client_id=GITHUB_CLIENT_ID,
-    client_secret=GITHUB_CLIENT_SECRET,
-    access_token_url='https://github.com/login/oauth/access_token', # nosec
-    access_token_params=None,
-    authorize_url='https://github.com/login/oauth/authorize',
-    authorize_params=None,
-    api_base_url='https://api.github.com/',
-    client_kwargs={'scope': 'repo user'},
-)
-
-
 
 @app.get("/")
 @limiter.limit("60/minute")
@@ -174,57 +263,58 @@ async def index(request: Request):
         """
         return HTMLResponse(html)
     html = """
-    <html>
-    <head>
-        <title>Login</title>
-        <style>
-            body {
-                font-family: 'Segoe UI', Arial, sans-serif;
-                background: linear-gradient(120deg, #f8fafc 0%, #e0e7ef 100%);
-                min-height: 100vh;
-                margin: 0;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
-            }
-            .container {
-                background: #fff;
-                border-radius: 16px;
-                box-shadow: 0 4px 24px rgba(0,0,0,0.08);
-                padding: 2.5rem 3rem;
-                text-align: center;
-            }
-            h1 {
-                color: #22223b;
-                margin-bottom: 1em;
-            }
-            a.button {
-                display: inline-block;
-                margin-top: 1.5em;
-                padding: 0.75em 2em;
-                background: #3a86ff;
-                color: #fff;
-                border-radius: 8px;
-                text-decoration: none;
-                font-size: 1.1em;
-                font-weight: 500;
-                transition: background 0.2s;
-            }
-            a.button:hover {
-                background: #265d97;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1>Multi-Tenant GitHub MCP</h1>
-            <a href='/login' class='button'>Login with GitHub</a>
-        </div>
-    </body>
-    </html>
-    """
+<html>
+<head>
+    <title>Login</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: linear-gradient(120deg, #f8fafc 0%, #e0e7ef 100%);
+            min-height: 100vh;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+            padding: 2.5rem 3rem;
+            text-align: center;
+        }
+        h1 {
+            color: #22223b;
+            margin-bottom: 1em;
+        }
+        a.button {
+            display: inline-block;
+            margin-top: 1.5em;
+            padding: 0.75em 2em;
+            background: #3a86ff;
+            color: #fff;
+            border-radius: 8px;
+            text-decoration: none;
+            font-size: 1.1em;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+        a.button:hover {
+            background: #265d97;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Multi-Tenant GitHub MCP</h1>
+        <a href='/login' class='button'>Login with GitHub</a>
+    </div>
+</body>
+</html>
+"""
     return HTMLResponse(html)
+
 
 @app.get("/logout")
 async def logout(request: Request):
