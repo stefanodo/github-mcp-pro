@@ -21,10 +21,13 @@ from github import Github
 # --- Load env and assign variables ---
 load_dotenv()
 logger = logging.getLogger(__name__)
+
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key")
 GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID", "")
 GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET", "")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
+if not GITHUB_TOKEN:
+    raise RuntimeError("Missing required GITHUB_TOKEN")
 REQUIRE_MCP_AUTH = os.getenv("REQUIRE_MCP_AUTH", "false").lower() == "true"
 MCP_AUTH_TOKEN = os.getenv("MCP_AUTH_TOKEN", "")
 
