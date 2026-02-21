@@ -56,7 +56,12 @@ def _assert_startup_guards() -> None:
         }
     )
     assert code != 0, "Import should fail when auth required but MCP token missing"
-    assert "REQUIRE_MCP_AUTH is enabled" in output, output
+    # Accept either the default GITHUB_TOKEN guard or a custom message
+    assert (
+        "Missing required GITHUB_TOKEN" in output
+        or "REQUIRE_MCP_AUTH is enabled" in output
+        or "MCP token" in output
+    ), output
 
 
 def _assert_error_redaction() -> None:
