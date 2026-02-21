@@ -138,6 +138,13 @@ import os
 import re
 import hashlib
 import hmac
+def review_pr(repo: str, pr_id: int):
+    """Stub for review_pr. Replace with actual implementation."""
+    return f"Review for PR #{pr_id} in repo {repo}"
+
+def assess_pr_risk(repo: str, pr_id: int):
+    """Stub for assess_pr_risk. Replace with actual implementation."""
+    return f"Risk assessment for PR #{pr_id} in repo {repo}"
 import logging
 from urllib.parse import quote
 from dotenv import load_dotenv
