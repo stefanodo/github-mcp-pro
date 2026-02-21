@@ -70,6 +70,7 @@ def _assert_error_redaction() -> None:
     env = os.environ.copy()
     env["REQUIRE_MCP_AUTH"] = "false"
     env["MCP_AUTH_TOKEN"] = "dummy"
+    env["GITHUB_TOKEN"] = "dummy"
     code = subprocess.run([
         sys.executable, "-c",
         "import main; sample = 'leaked token ' + 'ghp_' + ('A' * 32); redacted = main._sanitize_error(sample); assert 'ghp_' not in redacted; assert '[REDACTED_TOKEN]' in redacted"
@@ -83,6 +84,7 @@ async def _assert_static_token_verifier() -> None:
     env = os.environ.copy()
     env["REQUIRE_MCP_AUTH"] = "false"
     env["MCP_AUTH_TOKEN"] = "dummy"
+    env["GITHUB_TOKEN"] = "dummy"
     code = subprocess.run([
         sys.executable, "-c",
         "import asyncio; import main; verifier = main.StaticTokenVerifier('expected-secret'); valid = asyncio.get_event_loop().run_until_complete(verifier.verify_token('expected-secret')); assert valid is not None and 'mcp:access' in valid.scopes; invalid = asyncio.get_event_loop().run_until_complete(verifier.verify_token('wrong-secret')); assert invalid is None"
