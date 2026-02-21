@@ -1,4 +1,4 @@
-# --- All imports at the top ---
+    # --- All imports at the top ---
 import os
 import re
 import hashlib
@@ -31,8 +31,12 @@ if GITHUB_TOKEN in ("your_token_here", "ci_selfcheck_token_value_12345"):
     raise RuntimeError("GITHUB_TOKEN is set to a placeholder value")
 if not GITHUB_TOKEN:
     raise RuntimeError("Missing required GITHUB_TOKEN")
+
 REQUIRE_MCP_AUTH = os.getenv("REQUIRE_MCP_AUTH", "false").lower() == "true"
 MCP_AUTH_TOKEN = os.getenv("MCP_AUTH_TOKEN", "")
+# Guard: fail if REQUIRE_MCP_AUTH is enabled but MCP_AUTH_TOKEN is missing
+if REQUIRE_MCP_AUTH and not MCP_AUTH_TOKEN:
+    raise RuntimeError("REQUIRE_MCP_AUTH is enabled but MCP_AUTH_TOKEN is missing")
 
 # --- Restrict CORS to trusted domains (comma-separated in env) ---
 cors_origins = os.getenv("CORS_ALLOW_ORIGINS")
