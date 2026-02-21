@@ -1,3 +1,16 @@
+# --- StaticTokenVerifier for security self-check ---
+from typing import Optional
+
+class StaticTokenVerifier:
+    def __init__(self, expected_secret: str):
+        self.expected_secret = expected_secret
+
+    async def verify_token(self, token: str) -> Optional[object]:
+        if token == self.expected_secret:
+            class Result:
+                scopes = ["mcp:access"]
+            return Result()
+        return None
 # --- Error redaction utility for security self-check ---
 import re
 
