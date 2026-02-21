@@ -27,6 +27,9 @@ import logging
 from urllib.parse import quote
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, Response, Depends, HTTPException
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from fastapi.responses import RedirectResponse, HTMLResponse
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.config import Config
@@ -39,6 +42,7 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 
+
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key")
 GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID", "")
 GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET", "")
@@ -46,6 +50,14 @@ GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET", "")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
 REQUIRE_MCP_AUTH = os.getenv("REQUIRE_MCP_AUTH", "false").lower() == "true"
 MCP_AUTH_TOKEN = os.getenv("MCP_AUTH_TOKEN", "")
+
+# Restrict CORS to trusted domains (comma-separated in env)
+cors_origins = os.getenv("CORS_ALLOW_ORIGINS")
+if cors_origins:
+    allowed_origins = [o.strip() for o in cors_origins.split(",") if o.strip()]
+else:
+    # Default: allow only production domain, fallback to all for dev
+    allowed_origins = ["https://stefano-mcp-pro.fly.dev"] if os.getenv("ENV") == "production" else ["*"]
 
 
 # Security self-check and tests expect this guard:
@@ -58,11 +70,17 @@ if not GITHUB_CLIENT_ID or not GITHUB_CLIENT_SECRET:
 if REQUIRE_MCP_AUTH and not MCP_AUTH_TOKEN:
     raise RuntimeError("REQUIRE_MCP_AUTH is enabled but MCP_AUTH_TOKEN is missing")
 
+
+
+# --- Rate limiting setup ---
+limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
 app = FastAPI()
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -82,7 +100,10 @@ oauth.register(
     client_kwargs={'scope': 'repo user'},
 )
 
+
+
 @app.get("/")
+@limiter.limit("60/minute")
 async def index(request: Request):
     user = request.session.get('user')
     if user:
