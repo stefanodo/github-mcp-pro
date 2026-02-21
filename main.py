@@ -27,7 +27,9 @@ GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID", "")
 GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET", "")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
 # Guard: fail if GITHUB_TOKEN is missing or a known placeholder
-if GITHUB_TOKEN in ("", "your_token_here", "ci_selfcheck_token_value_12345"):
+if GITHUB_TOKEN in ("your_token_here", "ci_selfcheck_token_value_12345"):
+    raise RuntimeError("GITHUB_TOKEN is set to a placeholder value")
+if not GITHUB_TOKEN:
     raise RuntimeError("Missing required GITHUB_TOKEN")
 REQUIRE_MCP_AUTH = os.getenv("REQUIRE_MCP_AUTH", "false").lower() == "true"
 MCP_AUTH_TOKEN = os.getenv("MCP_AUTH_TOKEN", "")
