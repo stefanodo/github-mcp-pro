@@ -58,7 +58,7 @@ class MainSecurityTests(unittest.TestCase):
     def test_sanitize_error_redacts_tokens(self):
         main = import_main_with_env(
             {
-                "GITHUB_TOKEN": "ci_selfcheck_token_value_12345",
+                "GITHUB_TOKEN": "dummy_github_token",
                 "REQUIRE_MCP_AUTH": "false",
                 "MCP_AUTH_TOKEN": None,
             }
@@ -74,7 +74,7 @@ class MainSecurityTests(unittest.TestCase):
     def test_static_token_verifier_accepts_expected_token(self):
         main = import_main_with_env(
             {
-                "GITHUB_TOKEN": "ci_selfcheck_token_value_12345",
+                "GITHUB_TOKEN": "dummy_github_token",
                 "REQUIRE_MCP_AUTH": "false",
                 "MCP_AUTH_TOKEN": None,
             }

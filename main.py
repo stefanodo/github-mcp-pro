@@ -47,6 +47,14 @@ if GITHUB_TOKEN in ("your_token_here", "ci_selfcheck_token_value_12345", "ci_sel
 if not GITHUB_TOKEN:
     raise RuntimeError("Missing required GITHUB_TOKEN")
 
+# --- Error redaction utility for security self-check ---
+import re
+
+def _sanitize_error(msg: str) -> str:
+    # Redact GitHub tokens (ghp_..., github_pat_...) and similar patterns
+    token_pattern = re.compile(r"(ghp_[A-Za-z0-9]{22,}|github_pat_[A-Za-z0-9]{22,})")
+    return token_pattern.sub("[REDACTED_TOKEN]", msg)
+
 mcp = FastMCP("GitHub MCP Pro")
 
 # --- OAuth setup ---
@@ -129,13 +137,6 @@ class StaticTokenVerifier:
                 scopes = ["mcp:access"]
             return Result()
         return None
-# --- Error redaction utility for security self-check ---
-import re
-
-def _sanitize_error(msg: str) -> str:
-    # Redact GitHub tokens (ghp_...) and similar patterns
-    token_pattern = re.compile(r"ghp_[A-Za-z0-9]{32,}")
-    return token_pattern.sub("[REDACTED_TOKEN]", msg)
 # --- Multi-tenant FastAPI app with GitHub OAuth ---
 import os
 import re
