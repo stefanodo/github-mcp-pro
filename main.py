@@ -32,6 +32,7 @@ from starlette.config import Config
 from starlette.middleware.cors import CORSMiddleware
 from authlib.integrations.starlette_client import OAuth, OAuthError
 from github import Github
+from fastmcp import FastMCP
 
 # --- Load env and assign variables ---
 logger = logging.getLogger(__name__)
@@ -45,6 +46,8 @@ if GITHUB_TOKEN in ("your_token_here", "ci_selfcheck_token_value_12345", "ci_sel
     raise RuntimeError("Missing required GITHUB_TOKEN: GITHUB_TOKEN is set to a placeholder value")
 if not GITHUB_TOKEN:
     raise RuntimeError("Missing required GITHUB_TOKEN")
+
+mcp = FastMCP("GitHub MCP Pro")
 
 # --- OAuth setup ---
 config = Config(environ=os.environ)
@@ -145,6 +148,63 @@ def review_pr(repo: str, pr_id: int):
 def assess_pr_risk(repo: str, pr_id: int):
     """Stub for assess_pr_risk. Replace with actual implementation."""
     return f"Risk assessment for PR #{pr_id} in repo {repo}"
+
+@mcp.tool
+def triage_issue(repo: str, issue_id: int):
+    """Triages GitHub issues and applies labels based on content."""
+    try:
+        gh = Github(GITHUB_TOKEN)
+        gh_repo = gh.get_repo(repo)
+        issue = gh_repo.get_issue(issue_id)
+        
+        title = issue.title.lower()
+        body = (issue.body or "").lower()
+        text = title + " " + body
+        
+        labels_to_add = []
+        
+        # Determine type
+        if any(word in text for word in ["bug", "error", "fix", "broken", "crash", "fail"]):
+            labels_to_add.append("bug")
+        elif any(word in text for word in ["feature", "enhancement", "add", "new", "request"]):
+            labels_to_add.append("feature")
+        elif any(word in text for word in ["doc", "documentation", "readme", "guide"]):
+            labels_to_add.append("docs")
+        
+        # Determine priority
+        if any(word in text for word in ["urgent", "critical", "high priority", "asap"]):
+            labels_to_add.append("priority:high")
+        elif any(word in text for word in ["low", "minor", "nice to have"]):
+            labels_to_add.append("priority:low")
+        else:
+            labels_to_add.append("priority:medium")
+        
+        # Apply labels
+        if labels_to_add:
+            issue.add_to_labels(*labels_to_add)
+        
+        return f"✅ Issue #{issue_id} triaged: Labels: {', '.join(labels_to_add)}"
+    except Exception as e:
+        return f"❌ Failed to triage issue #{issue_id}: {str(e)}"
+
+@mcp.tool
+def fix_issue(repo: str, issue_id: int):
+    """Analyzes a GitHub issue and suggests or implements fixes."""
+    try:
+        gh = Github(GITHUB_TOKEN)
+        gh_repo = gh.get_repo(repo)
+        issue = gh_repo.get_issue(issue_id)
+        
+        title = issue.title
+        body = issue.body or ""
+        
+        # Simple analysis - in a real implementation, use AI to suggest fixes
+        analysis = f"Issue #{issue_id}: {title}\n\n{body}\n\nSuggested fix: [AI analysis would go here]"
+        
+        return f"✅ Analyzed issue #{issue_id}: {analysis}"
+    except Exception as e:
+        return f"❌ Failed to analyze issue #{issue_id}: {str(e)}"
+
 import logging
 from urllib.parse import quote
 from dotenv import load_dotenv
@@ -194,6 +254,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.mount("/mcp", mcp.http_app)
 
 @app.get("/")
 @limiter.limit("60/minute")

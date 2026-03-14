@@ -1,0 +1,43 @@
+name: Auto Issue Triage
+
+on:
+    issues:
+        types: [opened, reopened]
+
+permissions:
+    contents: read
+    issues: write
+    pull-requests: read
+
+jobs:
+    triage-issue:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v6
+
+            - name: Setup Python
+              uses: actions/setup-python@v6
+              with:
+                  python-version: "3.11"
+
+            - name: Install dependencies
+              run: pip install -r requirements.txt
+
+            - name: Run issue triage
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  GITHUB_CLIENT_ID: dummy_id
+                  GITHUB_CLIENT_SECRET: dummy_secret
+                  REPO: ${{ github.repository }}
+                  ISSUE_ID: ${{ github.event.issue.number }}
+              run: |
+                  python -c "
+                  from main import triage_issue
+                  import os
+                  repo = os.environ['REPO']
+                  issue_id = int(os.environ['ISSUE_ID'])
+                  result = triage_issue(repo, issue_id)
+                  print(result)
+                  "

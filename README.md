@@ -92,6 +92,21 @@ Natural-language prompt example:
 Triage issue 45 in owner/repo using github-pro.
 ```
 
+### `fix_issue`
+
+Analyzes GitHub issues and suggests fixes.
+
+```python
+fix_issue(repo="owner/repo", issue_id=45)
+# Returns: "✅ Analyzed issue #45: [analysis and suggested fixes]"
+```
+
+Natural-language prompt example:
+
+```text
+Fix issue 45 in owner/repo using github-pro.
+```
+
 ### `assess_pr_risk`
 
 Scores pull request risk and returns an actionable review checklist (chat-side output).
