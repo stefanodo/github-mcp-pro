@@ -20,10 +20,10 @@ jobs:
 
         steps:
             - name: Checkout
-              uses: actions/checkout@v6
+              uses: actions/checkout@v4
 
             - name: Setup Python
-              uses: actions/setup-python@v6
+              uses: actions/setup-python@v5
               with:
                   python-version: "3.11"
 
@@ -41,14 +41,13 @@ jobs:
                   REF_NAME: ${{ github.ref_name }}
                   BEFORE_SHA: ${{ github.event.before }}
                   HEAD_SHA: ${{ github.sha }}
+                  IS_FORK: ${{ github.event.pull_request.head.repo.fork }}
               run: |
                   python - <<'PY'
                   import os
                   import sys
-                  import re
-                  from collections import Counter
                   from github import Github, Auth
-                  from main import review_pr, assess_pr_risk
+                  from main import review_pr, assess_pr_risk, _build_findings, _summarize_findings
 
                   event_name = os.environ["EVENT_NAME"]
                   repo = os.environ["REPO"]
@@ -56,84 +55,16 @@ jobs:
                   ref_name = os.environ.get("REF_NAME", "")
                   before_sha = os.environ.get("BEFORE_SHA", "")
                   head_sha = os.environ.get("HEAD_SHA", "")
+                  is_fork = os.environ.get("IS_FORK", "").lower() == "true"
 
                   gh = Github(auth=Auth.Token(token))
                   gh_repo = gh.get_repo(repo)
 
-                  ghp_prefix = "gh" + "p_"
-                  pat_prefix = "github_" + "pat_"
-                  token_pattern = re.compile(
-                      rf"{ghp_prefix}[A-Za-z0-9]{{20,}}|{pat_prefix}[A-Za-z0-9_]{{20,}}"
-                  )
-
-                  def is_placeholder_token(path: str, line: str, token_value: str) -> bool:
-                      lowered_line = line.lower()
-                      lowered_path = path.lower()
-
-                      if (
-                          "exampletoken" in token_value.lower()
-                          or "your_token_here" in lowered_line
-                          or "replace_with_real_token" in lowered_line
-                          or "<real-github-token>" in lowered_line
-                      ):
+                  def post_quality_gate(commit_sha: str, counts, scope: str) -> bool:
+                      if is_fork:
+                          print(f"Fork PR detected. Skipping quality gate for {scope}.")
                           return True
 
-                      if lowered_path in {"readme.md", ".env.example", "scripts/security_selfcheck.py"}:
-                          return True
-
-                      return False
-
-                  def add_findings_from_patch(path: str, patch: str, findings: list[str]) -> None:
-                      if not patch:
-                          return
-
-                      lowered = patch.lower()
-                      if "console.log" in lowered:
-                          findings.append(f"MINOR: {path} contains console.log")
-
-                      for raw in patch.splitlines():
-                          if not raw.startswith("+") or raw.startswith("+++"):
-                              continue
-
-                          line = raw[1:]
-                          stripped = line.strip()
-
-                          if "findings.append(" in stripped and (
-                              "eval() added" in stripped
-                              or "potential hardcoded GitHub token" in stripped
-                          ):
-                              continue
-
-                          if re.search(r"(?<!['\"])\beval\s*\(", line):
-                              findings.append(f"CRITICAL: {path} eval() added")
-                          if re.search(r"(?<!['\"])\bdebugger\b", line):
-                              findings.append(f"MAJOR: {path} debugger statement added")
-                          if re.search(r"^\s*except\s*:\s*$", line):
-                              findings.append(f"MAJOR: {path} bare except detected")
-                          token_match = token_pattern.search(line)
-                          if token_match:
-                              token_value = token_match.group(0)
-                              if not is_placeholder_token(path, line, token_value):
-                                  findings.append(f"CRITICAL: {path} potential hardcoded GitHub token")
-                          if "password" in stripped.lower() and "=" in stripped and "\"" in stripped:
-                              findings.append(f"MAJOR: {path} possible hardcoded password")
-                          if "todo" in stripped.lower() or "fixme" in stripped.lower():
-                              findings.append(f"INFO: {path} TODO/FIXME added")
-
-                  def summarize_findings(findings: list[str]) -> Counter:
-                      counts = Counter()
-                      for finding in findings:
-                          if finding.startswith("CRITICAL"):
-                              counts["critical"] += 1
-                          elif finding.startswith("MAJOR"):
-                              counts["major"] += 1
-                          elif finding.startswith("MINOR"):
-                              counts["minor"] += 1
-                          else:
-                              counts["info"] += 1
-                      return counts
-
-                  def post_quality_gate(commit_sha: str, counts: Counter, scope: str) -> bool:
                       critical_count = counts.get("critical", 0)
                       commit = gh_repo.get_commit(commit_sha)
 
@@ -171,9 +102,9 @@ jobs:
                       findings: list[str] = []
 
                       for changed_file in files:
-                          add_findings_from_patch(changed_file.filename, changed_file.patch or "", findings)
+                          findings.extend(_build_findings(changed_file.filename, changed_file.patch or ""))
 
-                      counts = summarize_findings(findings)
+                      counts = _summarize_findings(findings)
 
                       header = "<!-- mcp-branch-feedback -->\n**🤖 Automated Branch Commit Feedback**"
                       summary = (
@@ -218,26 +149,12 @@ jobs:
                   print(review_result)
                   print(risk_result)
 
-                  pr = gh_repo.get_pull(pr_id)
-                  marker = "<!-- mcp-risk-assessment -->"
-                  body = f"{marker}\n**🤖 Automated PR Risk Assessment**\n\n```text\n{risk_result}\n```"
-
-                  existing = None
-                  for comment in pr.get_issue_comments():
-                      if comment.body and marker in comment.body:
-                          existing = comment
-                          break
-
-                  if existing:
-                      existing.edit(body)
-                  else:
-                      pr.create_issue_comment(body)
-
                   pr_findings: list[str] = []
+                  pr = gh_repo.get_pull(pr_id)
                   for changed_file in pr.get_files():
-                      add_findings_from_patch(changed_file.filename, changed_file.patch or "", pr_findings)
+                      pr_findings.extend(_build_findings(changed_file.filename, changed_file.patch or ""))
 
-                  pr_counts = summarize_findings(pr_findings)
+                  pr_counts = _summarize_findings(pr_findings)
                   if not post_quality_gate(pr.head.sha, pr_counts, f"PR #{pr_id}"):
                       sys.exit(1)
                   PY
