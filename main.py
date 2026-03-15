@@ -269,10 +269,11 @@ def review_pr(repo: str, pr_id: int):
 
     try:
         if has_critical and inline_comments:
+            blocking_reviews_enabled = os.getenv("MCP_ENABLE_BLOCKING_REVIEWS", "false").lower() == "true"
             pr.create_review(
                 commit=gh_repo.get_commit(pr.head.sha),
                 body="🤖 GitHub MCP Pro inline findings",
-                event="REQUEST_CHANGES",
+                event="REQUEST_CHANGES" if blocking_reviews_enabled else "COMMENT",
                 comments=inline_comments,
             )
         elif not has_critical:
