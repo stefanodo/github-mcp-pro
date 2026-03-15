@@ -267,17 +267,23 @@ def review_pr(repo: str, pr_id: int):
     )
     _upsert_issue_comment(pr, marker, summary_body)
 
-    if inline_comments:
-        try:
-            review_event = "REQUEST_CHANGES" if has_critical else "COMMENT"
+    try:
+        if has_critical and inline_comments:
             pr.create_review(
                 commit=gh_repo.get_commit(pr.head.sha),
                 body="🤖 GitHub MCP Pro inline findings",
-                event=review_event,
+                event="REQUEST_CHANGES",
                 comments=inline_comments,
             )
-        except Exception as exc:
-            logger.warning("Inline review failed (non-fatal): %s", _sanitize_error(str(exc)))
+        elif not has_critical:
+            # Always publish an approval so any previous bot-requested changes are superseded.
+            pr.create_review(
+                commit=gh_repo.get_commit(pr.head.sha),
+                body="🤖 GitHub MCP Pro review passed: no critical findings.",
+                event="APPROVE",
+            )
+    except Exception as exc:
+        logger.warning("Inline review failed (non-fatal): %s", _sanitize_error(str(exc)))
 
     status_emoji = "❌" if has_critical else "✅"
     return (

@@ -85,6 +85,31 @@ class PRToolTests(unittest.TestCase):
         pr.create_review.assert_called_once()
         self.assertEqual(pr.create_review.call_args.kwargs["event"], "REQUEST_CHANGES")
 
+    def test_review_pr_approves_when_no_critical(self):
+        file_obj = SimpleNamespace(
+            filename="src/app.py",
+            patch="+print('ok')",
+            changes=1,
+        )
+        pr = MagicMock()
+        pr.get_files.return_value = [file_obj]
+        pr.get_issue_comments.return_value = []
+        pr.head = SimpleNamespace(sha="abc123")
+
+        gh_repo = MagicMock()
+        gh_repo.get_pull.return_value = pr
+        gh_repo.get_commit.return_value = MagicMock()
+
+        gh = MagicMock()
+        gh.get_repo.return_value = gh_repo
+
+        with patch.object(self.main, "Github", return_value=gh):
+            result = self.main.review_pr("owner/repo", 13)
+
+        self.assertIn("critical:0", result)
+        pr.create_review.assert_called_once()
+        self.assertEqual(pr.create_review.call_args.kwargs["event"], "APPROVE")
+
     def test_assess_pr_risk_posts_own_comment(self):
         files = [
             SimpleNamespace(filename="auth/login.py", additions=350),
