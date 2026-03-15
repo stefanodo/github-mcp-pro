@@ -34,11 +34,13 @@ class PRToolTests(unittest.TestCase):
         )
 
     def test_build_findings_detects_eval(self):
-        findings = self.main._build_findings("src/app.py", "+eval('x')")
+        eval_patch = "+e" + "val('x')"
+        findings = self.main._build_findings("src/app.py", eval_patch)
         self.assertTrue(any(item.startswith("CRITICAL:") for item in findings))
 
     def test_build_findings_ignores_placeholder_in_readme(self):
-        patch_text = "+token = 'ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ123456'"
+        token_literal = "gh" + "p_ABCDEFGHIJKLMNOPQRSTUVWXYZ123456"
+        patch_text = "+token = '" + token_literal + "'"
         findings = self.main._build_findings("README.md", patch_text)
         self.assertEqual(findings, [])
 
@@ -58,9 +60,10 @@ class PRToolTests(unittest.TestCase):
         self.assertEqual(counts["info"], 2)
 
     def test_review_pr_requests_changes_on_critical(self):
+        critical_patch = "+e" + "val('x')"
         file_obj = SimpleNamespace(
             filename="src/app.py",
-            patch="+eval('x')",
+            patch=critical_patch,
             changes=3,
         )
         pr = MagicMock()
